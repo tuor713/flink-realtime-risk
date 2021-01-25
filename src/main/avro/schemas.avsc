@@ -1,0 +1,283 @@
+[
+  {
+    "namespace": "org.uwh",
+    "name": "UIDType",
+    "type": "enum",
+    "symbols": ["UIPID","UITID"]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "ProductType",
+    "type": "enum",
+    "symbols": ["Bond", "CDS", "CDX", "Other"]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "Command",
+    "type": "record",
+    "fields": [
+      {
+        "name": "Type",
+        "type": {
+          "type": "enum",
+          "name": "CommandType",
+          "symbols": ["TICK", "QUERY"]
+        }
+      },
+      {
+        "name": "Payload",
+        "type": ["long", {
+          "name": "Query",
+          "type": "record",
+          "fields": [
+            {
+              "name": "Select",
+              "type": {
+                "type": "array",
+                "items": "string"
+              }
+            },
+            {
+              "name": "Ids",
+              "type": {
+                "type": "array",
+                "items": "string"
+              }
+            },
+            {
+              "name": "Where",
+              "type": {
+                "type": "map",
+                "values": {
+                  "type": "array",
+                  "items": "string"
+                }
+              }
+            }
+          ]
+        }]
+      }
+    ]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "RiskFactorType",
+    "type": "enum",
+    "symbols": ["Issuer"]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "RiskMeasure",
+    "type": "enum",
+    "symbols": ["CR01", "JTD"]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "FirmAccount",
+    "type": "record",
+    "fields": [
+      {
+        "name": "Mnemonic",
+        "type": "string"
+      },
+      {
+        "name": "StrategyCode",
+        "type": "string"
+      },
+      {
+        "name": "AuditDateTimeUTC",
+        "type": "long"
+      }
+    ]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "Issuer",
+    "type": "record",
+    "fields": [
+      {
+        "name": "SMCI",
+        "type": "string"
+      },
+      {
+        "name": "Name",
+        "type": "string"
+      },
+      {
+        "name": "UltimateParentSMCI",
+        "type": ["null", "string"]
+      }
+    ]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "RiskThreshold",
+    "type": "record",
+    "fields": [
+      {
+        "name": "RiskFactorType",
+        "type": "RiskFactorType"
+      },
+      {
+        "name": "RiskFactor",
+        "type": "string"
+      },
+      {
+        "name": "Thresholds",
+        "type": {
+          "type": "map",
+          "values": "double"
+        }
+      }
+    ]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "RiskThresholdUtilization",
+    "type": "record",
+    "fields": [
+      {
+        "name": "RiskFactorType",
+        "type": "RiskFactorType"
+      },
+      {
+        "name": "RiskFactor",
+        "type": "string"
+      },
+      {
+        "name": "Utilization",
+        "type": {
+          "type": "map",
+          "values": {
+            "type": "record",
+            "name": "Utilization",
+            "fields": [
+              {
+                "name": "Threshold",
+                "type": "double"
+              },
+              {
+                "name": "Exposure",
+                "type": "double"
+              },
+              {
+                "name": "Utilization",
+                "type": "double"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "RiskPosition",
+    "type": "record",
+    "fields": [
+      {
+        "name": "UIDType",
+        "type": "UIDType"
+      },
+      {
+        "name": "UID",
+        "type": "string"
+      },
+      {
+        "name": "FirmAccountMnemonic",
+        "type": "string"
+      },
+      {
+        "name": "ProductType",
+        "type": "ProductType"
+      },
+      {
+        "name": "AuditDateTimeUTC",
+        "type": "long"
+      }
+    ]
+  },
+
+  {
+    "namespace": "org.uwh",
+    "name": "IssuerRisk",
+    "type": "record",
+    "fields": [
+      {
+        "name": "UIDType",
+        "type": "UIDType"
+      },
+      {
+        "name": "UID",
+        "type": "string"
+      },
+      {
+        "name": "SMCI",
+        "type": "string"
+      },
+      {
+        "name": "BusinessDate",
+        "type": "string"
+      },
+      {
+        "name": "CR01",
+        "type": "double"
+      },
+      {
+        "name": "JTD",
+        "type": "double"
+      },
+      {
+        "name": "AuditDateTimeUTC",
+        "type": "long"
+      }
+    ]
+  },
+  {
+    "namespace": "org.uwh",
+    "name": "IssuerRiskBatch",
+    "type": "record",
+    "fields": [
+      {
+        "name": "UIDType",
+        "type": "UIDType"
+      },
+      {
+        "name": "UID",
+        "type": "string"
+      },
+      {
+        "name": "BusinessDate",
+        "type": "string"
+      },
+      {
+        "name": "AuditDateTimeUTC",
+        "type": "long"
+      },
+      {
+        "name": "risk",
+        "type": {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "IssuerRiskLine",
+            "fields": [
+              {
+                "name": "SMCI",
+                "type": "string"
+              },
+              {
+                "name": "CR01",
+                "type": "double"
+              },
+              {
+                "name": "JTD",
+                "type": "double"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+]

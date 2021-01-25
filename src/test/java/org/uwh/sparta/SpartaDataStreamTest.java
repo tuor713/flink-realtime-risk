@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SpartaDataStreamTest {
     private static Logger logger = LoggerFactory.getLogger(SpartaDataStreamTest.class);
+    private static String COB = "20210101";
 
     static class AggSink implements SinkFunction<RowData> {
         public static Map<String,Double> issuerJTD = new HashMap<>();
@@ -57,6 +58,24 @@ public class SpartaDataStreamTest {
 
     private StreamExecutionEnvironment env;
     private TwoStageDataStreamFlowBuilder builder;
+
+    private static class TwoStageDataStreamFlowBuilder {
+        public static final int RESULT_FIELD_SMCI = 0;
+        public static final int RESULT_FIELD_JTD = 1;
+        
+        public TwoStageDataStreamFlowBuilder(StreamExecutionEnvironment env) {}
+
+        public void setThrottleMs(long ms) {}
+        public void setRiskSource(DataStream<IssuerRisk> stream) {}
+        public void setRiskPositionSource(DataStream<RiskPosition> stream) {}
+        public void setIssuerSource(DataStream<Issuer> stream) {}
+        public void setThresholdSource(DataStream<RiskThreshold> stream) {}
+
+        public void build() {}
+
+        public DataStream<RowData> getResultStream() { return null; }
+        public DataStream<RowData> getJoinedStream() { return null; }
+    }
 
     @BeforeEach
     public void setup() {
@@ -137,9 +156,9 @@ public class SpartaDataStreamTest {
     @Test
     public void testThrottledRiskRetriggers() throws Exception {
         builder.setRiskSource(Sources.start(env, TypeInformation.of(IssuerRisk.class))
-                .then(Collections.singleton(new IssuerRisk(UIDType.UITID, "T1", "IBM", 10.0, 50.0, 1L)))
+                .then(Collections.singleton(new IssuerRisk(UIDType.UITID, "T1", "IBM", COB, 10.0, 50.0, 1L)))
                 .delay(500)
-                .then(Collections.singleton(new IssuerRisk(UIDType.UITID, "T1", "IBM", 10.0, 100.0, 2L)))
+                .then(Collections.singleton(new IssuerRisk(UIDType.UITID, "T1", "IBM", COB, 10.0, 100.0, 2L)))
                 .toStream());
         builder.setRiskPositionSource(Sources.start(env, TypeInformation.of(RiskPosition.class))
                 .then(Collections.singleton(new RiskPosition(UIDType.UITID, "T1", "BOOK", ProductType.CDS, 1L)))
@@ -213,8 +232,8 @@ public class SpartaDataStreamTest {
     @Test
     public void testCanHandleSameTradeIdWithDifferentType() throws Exception {
         withRiskRecords(
-                new IssuerRisk(UIDType.UITID, "T1", "IBM", 0.0, 50.0, 1L),
-                new IssuerRisk(UIDType.UIPID, "T1", "IBM", 0.0, 50.0, 2L)
+                new IssuerRisk(UIDType.UITID, "T1", "IBM", COB, 0.0, 50.0, 1L),
+                new IssuerRisk(UIDType.UIPID, "T1", "IBM", COB, 0.0, 50.0, 2L)
         );
 
         run();
@@ -223,7 +242,7 @@ public class SpartaDataStreamTest {
     }
 
     private void withRiskRecords(Tuple4<String, String, Double, Long>... recs) throws Exception {
-        List<IssuerRisk> risk = Arrays.stream(recs).map(t -> new IssuerRisk(UIDType.UITID, t.f1, t.f0, 0.0, t.f2, t.f3)).collect(Collectors.toList());
+        List<IssuerRisk> risk = Arrays.stream(recs).map(t -> new IssuerRisk(UIDType.UITID, t.f1, t.f0, COB, 0.0, t.f2, t.f3)).collect(Collectors.toList());
         List<RiskPosition> pos = Arrays.stream(recs).map(t -> new RiskPosition(UIDType.UITID, t.f1, "BOOK", ProductType.CDS, 1L)).collect(Collectors.toList());
 
         builder.setRiskSource(env.fromCollection(risk));

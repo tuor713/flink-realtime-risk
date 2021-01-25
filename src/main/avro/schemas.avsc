@@ -13,54 +13,6 @@
   },
   {
     "namespace": "org.uwh",
-    "name": "Command",
-    "type": "record",
-    "fields": [
-      {
-        "name": "Type",
-        "type": {
-          "type": "enum",
-          "name": "CommandType",
-          "symbols": ["TICK", "QUERY"]
-        }
-      },
-      {
-        "name": "Payload",
-        "type": ["long", {
-          "name": "Query",
-          "type": "record",
-          "fields": [
-            {
-              "name": "Select",
-              "type": {
-                "type": "array",
-                "items": "string"
-              }
-            },
-            {
-              "name": "Ids",
-              "type": {
-                "type": "array",
-                "items": "string"
-              }
-            },
-            {
-              "name": "Where",
-              "type": {
-                "type": "map",
-                "values": {
-                  "type": "array",
-                  "items": "string"
-                }
-              }
-            }
-          ]
-        }]
-      }
-    ]
-  },
-  {
-    "namespace": "org.uwh",
     "name": "RiskFactorType",
     "type": "enum",
     "symbols": ["Issuer"]

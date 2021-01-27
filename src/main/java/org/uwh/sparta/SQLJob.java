@@ -9,10 +9,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.types.RowKind;
 import org.uwh.*;
-import org.uwh.flink.data.generic.Field;
-import org.uwh.flink.data.generic.Record;
-import org.uwh.flink.data.generic.RecordType;
-import org.uwh.flink.data.generic.Stream;
+import org.uwh.flink.data.generic.*;
 
 import java.util.*;
 
@@ -34,6 +31,12 @@ public class SQLJob {
 
     private static final Field<List<IssuerRiskLine>> F_RISK_ISSUER_RISKS = new Field<List<IssuerRiskLine>>("issuer-risk", "risks", (Class) List.class, new ListTypeInfo<>(IssuerRiskLine.class));
 
+    private static final Field<Double> F_RISK_LIMIT_CR01_THRESHOLD = new Field<>("risk-limit", "cr01-threshold", Double.class, Types.DOUBLE);
+    private static final Field<Double> F_RISK_LIMIT_JTD_THRESHOLD = new Field<>("risk-limit", "jtd-threshold", Double.class, Types.DOUBLE);
+
+    private static final Field<Double> F_RISK_LIMIT_CR01_UTILIZATION = new Field<>("risk-limit", "cr01-utilization", Double.class, Types.DOUBLE);
+    private static final Field<Double> F_RISK_LIMIT_JTD_UTILIZATION = new Field<>("risk-limit", "jtd-utilization", Double.class, Types.DOUBLE);
+
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment.setDefaultLocalParallelism(4);
         Configuration conf = new Configuration();
@@ -46,7 +49,6 @@ public class SQLJob {
         DataStream<Issuer> issuerStream = Generators.issuers(env, Generators.NO_ISSUER, Generators.NO_ULTIMATE);
         DataStream<FirmAccount> accountStream = Generators.accounts(env, Generators.NO_ACCOUNT);
         DataStream<IssuerRiskBatch> batchStream = Generators.batchRisk(env, numPositions, Generators.NO_USED_ISSUER);
-
 
         RecordType issuerType = new RecordType(env.getConfig(), F_ISSUER_ID, F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_ID);
         Stream issuers = Stream.fromDataStream(
@@ -112,9 +114,37 @@ public class SQLJob {
                 rec -> Tuple2.of(rec.get(F_POS_UID_TYPE), rec.get(F_POS_UID)),
                 new TupleTypeInfo<>(Types.STRING, Types.STRING));
 
-        Stream aggStream = finalStream.aggregate(List.of(F_ISSUER_ULTIMATE_PARENT_ID, F_POS_PRODUCT_TYPE), List.of(F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD), 10_000);
 
-        aggStream.log("AGG", 1_000);
+        // === Tier 2 logic ===
+
+        Stream aggStream = finalStream.aggregate(List.of(F_ISSUER_ULTIMATE_PARENT_ID), List.of(F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD), 10_000);
+
+        DataStream<RiskThreshold> thresholdStream = Generators.thresholds(env, Generators.NO_ULTIMATE);
+
+        RecordType thresholdType = new RecordType(env.getConfig(), F_ISSUER_ULTIMATE_PARENT_ID, F_RISK_LIMIT_CR01_THRESHOLD, F_RISK_LIMIT_JTD_THRESHOLD);
+        Stream thresholds = Stream.fromDataStream(
+                thresholdStream.filter(thres -> thres.getRiskFactorType() == RiskFactorType.Issuer),
+                thres -> {
+                    Record res = new Record(thresholdType);
+                    res.set(F_ISSUER_ULTIMATE_PARENT_ID, thres.getRiskFactor());
+                    res.set(F_RISK_LIMIT_CR01_THRESHOLD, thres.getThresholds().get(RiskMeasure.CR01.name()));
+                    res.set(F_RISK_LIMIT_JTD_THRESHOLD, thres.getThresholds().get(RiskMeasure.JTD.name()));
+                    return res;
+                },
+                thresholdType
+        );
+
+        Stream aggWithThresholds = aggStream.joinOneToOne(thresholds, F_ISSUER_ULTIMATE_PARENT_ID);
+
+        aggWithThresholds.select(
+                F_ISSUER_ULTIMATE_PARENT_ID,
+                F_RISK_ISSUER_CR01,
+                F_RISK_LIMIT_CR01_THRESHOLD,
+                Expressions.map(rec -> 100 * Math.abs(rec.get(F_RISK_ISSUER_CR01) / rec.get(F_RISK_LIMIT_CR01_THRESHOLD)), F_RISK_LIMIT_CR01_UTILIZATION),
+                F_RISK_ISSUER_JTD,
+                F_RISK_LIMIT_JTD_THRESHOLD,
+                Expressions.map(rec -> 100 * Math.abs(rec.get(F_RISK_ISSUER_JTD) / rec.get(F_RISK_LIMIT_JTD_THRESHOLD)), F_RISK_LIMIT_JTD_UTILIZATION)
+        ).log("LIMIT", 1_000);
 
         env.execute();
     }

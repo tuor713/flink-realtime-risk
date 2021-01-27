@@ -35,7 +35,6 @@ public class RecordType implements Serializable, ResultTypeQueryable<RowData> {
         void set(GenericRowData data, T value);
     }
 
-
     @SuppressWarnings("rawtypes")
     public RecordType(ExecutionConfig config, Field... fields) {
         this(config, Arrays.asList(fields));

@@ -62,7 +62,7 @@ public class SpartaDataStreamTest {
     private static class TwoStageDataStreamFlowBuilder {
         public static final int RESULT_FIELD_SMCI = 0;
         public static final int RESULT_FIELD_JTD = 1;
-        
+
         public TwoStageDataStreamFlowBuilder(StreamExecutionEnvironment env) {}
 
         public void setThrottleMs(long ms) {}

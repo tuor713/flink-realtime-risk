@@ -8,7 +8,7 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.uwh.*;
 
 import java.io.Serializable;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -25,7 +25,7 @@ public class Generators {
     public static final int NO_POSITION = 500_000;
     public static final int NO_ISSUERS_FOR_INDEX = 125;
 
-    private static final String COB = DateTimeFormatter.ofPattern("yyyyMMdd").format(Instant.now());
+    private static final String COB = DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now());
 
     private static class GeneratorIterator<T> implements Iterator<T>, Serializable {
         private final Supplier<T> generator;

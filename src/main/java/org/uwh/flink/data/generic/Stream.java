@@ -36,6 +36,24 @@ public class Stream implements Serializable {
         );
     }
 
+    public Stream select(Expression... expressions) {
+        RecordType resultType = new RecordType(type.getConfig(), Arrays.stream(expressions).map(Expression::getResultField).collect(Collectors.toList()));
+
+        return new Stream(
+                stream.map(row -> {
+                    Record cur  = new Record(row, type);
+                    Record res = new Record(cur.getKind(), resultType);
+
+                    for (Expression exp : expressions) {
+                        res.set(exp.getResultField(), exp.map(cur));
+                    }
+
+                    return res.getRow();
+                }, resultType.getProducedType()),
+                resultType
+        );
+    }
+
     public Stream select(Map<Field,Field> mapping) {
         RecordType resultType = type.mapped(mapping);
 
@@ -71,33 +89,7 @@ public class Stream implements Serializable {
         DataStream<RowData> resStream = stream.keyBy(row -> key.getKey(new Record(row, type)), keyType)
                 .connect(right.stream.keyBy(row -> key.getKey(new Record(row, right.type)), keyType))
                 .process(new ManyToOneJoin<>(
-                            (currentLeft, currentRight, newLeft, newRight) -> {
-                                Record leftRec;
-                                Record rightRec;
-                                RowKind kind;
-
-                                // Is this logic correct - it depends on all inputs sending UPSERT_BEFORE & UPSERT_AFTER correctly, no?
-                                if (newLeft != null) {
-                                    leftRec = new Record(newLeft, type);
-                                    rightRec = new Record(currentRight, right.type);
-                                    kind = newLeft.getRowKind();
-                                } else {
-                                    leftRec = new Record(currentLeft, type);
-                                    rightRec = new Record(newRight, right.type);
-                                    kind = newRight.getRowKind();
-                                }
-
-                                Record output = new Record(kind, resType);
-
-                                for (Field f : type.getFields()) {
-                                    output.set(f, leftRec.get(f));
-                                }
-                                for (Field f : right.type.getFields()) {
-                                    output.set(f, rightRec.get(f));
-                                }
-
-                                return Collections.singleton(output.getRow());
-                            },
+                            (currentLeft, currentRight, newLeft, newRight) -> defaultJoin(currentLeft, currentRight, newLeft, newRight, type, right.type, resType),
                                     type.getProducedType(),
                                     leftPrimaryKeyType,
                                     row -> leftPrimaryKey.getKey(new Record(row, type)),
@@ -105,6 +97,56 @@ public class Stream implements Serializable {
                 ), resType.getProducedType()).name("Join N-1");
 
         return new Stream(resStream, resType);
+    }
+
+    private Collection<Record> defaultJoin(Record curLeft, Record curRight, Record newLeft, Record newRight, RecordType resType) {
+        Record leftRec;
+        Record rightRec;
+        RowKind kind;
+
+        // Is this logic correct - it depends on all inputs sending UPSERT_BEFORE & UPSERT_AFTER correctly, no?
+        if (newLeft != null) {
+            leftRec = newLeft;
+            rightRec = curRight;
+            kind = newLeft.getKind();
+        } else {
+            leftRec = curLeft;
+            rightRec = newRight;
+            kind = newRight.getKind();
+        }
+
+        Record output = new Record(kind, resType);
+
+        for (Field f : leftRec.getType().getFields()) {
+            output.set(f, leftRec.get(f));
+        }
+        for (Field f : rightRec.getType().getFields()) {
+            output.set(f, rightRec.get(f));
+        }
+
+        return Collections.singleton(output);
+    }
+
+    private Collection<RowData> defaultJoin(RowData curLeft, RowData curRight, RowData newLeft, RowData newRight, RecordType leftType, RecordType rightType, RecordType resType) {
+        Collection<Record> res = defaultJoin(
+                (curLeft != null) ? new Record(curLeft, leftType) : null,
+                (curRight != null) ? new Record(curRight, rightType) : null,
+                (newLeft != null) ? new Record(newLeft, leftType) : null,
+                (newRight != null) ? new Record(newRight, rightType) : null,
+                resType
+        );
+
+        return res.stream().map(Record::getRow).collect(Collectors.toList());
+    }
+
+    public<T> Stream joinOneToOne(Stream right, Field<T> key) {
+        RecordType resType = type.join(right.type);
+        return joinOneToOne(
+                right,
+                rec -> rec.get(key),
+                key.getType(),
+                (curLeft, curRight, newLeft, newRight) -> defaultJoin(curLeft, curRight, newLeft, newRight, resType),
+                resType);
     }
 
     public<U> Stream joinOneToOne(Stream right, KeySelector<Record, U> key, TypeInformation<U> keyType, DeltaJoinFunction<Record, Record, Record> join, RecordType resType) {

@@ -11,7 +11,7 @@ import org.apache.flink.table.types.logical.VarCharType;
 import java.io.Serializable;
 import java.util.Objects;
 
-public class Field<T> implements Serializable, Comparable<Field<T>> {
+public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<T> {
     private final String namespace;
     private final String name;
     private final Class<T> clazz;
@@ -53,6 +53,16 @@ public class Field<T> implements Serializable, Comparable<Field<T>> {
 
     public Class<T> getTypeClass() {
         return clazz;
+    }
+
+    @Override
+    public Field<T> getResultField() {
+        return this;
+    }
+
+    @Override
+    public T map(Record rec) {
+        return rec.get(this);
     }
 
     @Override

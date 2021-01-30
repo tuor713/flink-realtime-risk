@@ -128,16 +128,6 @@ public class RecordType implements Serializable, ResultTypeQueryable<RowData> {
         return new RecordType(config, fields);
     }
 
-    public RecordType mapped(Map<Field,Field> mapping) {
-        for (Field key : mapping.keySet()) {
-            if (!fields.contains(key)) {
-                throw new IllegalArgumentException("Mapping maps a field that does not exist in the source " + key);
-            }
-        }
-
-        return new RecordType(config, mapping.values());
-    }
-
     public ExecutionConfig getConfig() {
         return config;
     }

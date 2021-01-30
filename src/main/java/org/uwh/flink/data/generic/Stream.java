@@ -1,6 +1,5 @@
 package org.uwh.flink.data.generic;
 
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -23,21 +22,51 @@ import java.util.stream.Collectors;
 public class Stream implements Serializable {
     private transient final DataStream<RowData> stream;
     private final RecordType type;
+    private final ChangeLogMode changeLogMode;
 
-    private Stream(DataStream<RowData> stream, RecordType type) {
-        this.stream = stream;
-        this.type = type;
+    public enum ChangeLogMode {
+        // only Insert records
+        APPEND,
+        // Insert, Upsert_before, Upsert_after and Delete
+        // Upsert_after and Delete
+        CHANGE_LOG,
+        KEYED_CHANGE_LOG
     }
 
-    public static<T> Stream fromDataStream(DataStream<T> stream, MapFunction<T, Record> mapper, RecordType type) {
+    private Stream(DataStream<RowData> stream, RecordType type, ChangeLogMode mode) {
+        this.stream = stream;
+        this.type = type;
+        changeLogMode = mode;
+    }
+
+    public static<T> Stream fromDataStream(DataStream<T> stream, Expressions.FieldConverter<T,?>... converters) {
+        RecordType type = new RecordType(stream.getExecutionConfig(), Arrays.stream(converters).map(Expressions.FieldConverter::getField).collect(Collectors.toList()));
+
         return new Stream(
-                stream.map(it -> mapper.map(it).getRow(), type.getProducedType()),
-                type
+                stream.map(obj -> {
+                    Record rec = new Record(RowKind.INSERT, type);
+
+                    for (Expressions.FieldConverter<T,Object> conv : (Expressions.FieldConverter<T, Object>[]) converters) {
+                        rec.set(conv.getField(), conv.map(obj));
+                    }
+
+                    return rec.getRow();
+                }, type.getProducedType()),
+                type,
+                ChangeLogMode.APPEND
         );
     }
 
     public Stream select(Expression... expressions) {
-        RecordType resultType = new RecordType(type.getConfig(), Arrays.stream(expressions).map(Expression::getResultField).collect(Collectors.toList()));
+        RecordType resultType = new RecordType(type.getConfig(), Arrays.stream(expressions).flatMap(
+                exp -> {
+                    if (exp.isStar()) {
+                        return type.getFields().stream();
+                    } else {
+                        return java.util.stream.Stream.of(exp.getResultField());
+                    }
+                }
+        ).collect(Collectors.toList()));
 
         return new Stream(
                 stream.map(row -> {
@@ -45,35 +74,20 @@ public class Stream implements Serializable {
                     Record res = new Record(cur.getKind(), resultType);
 
                     for (Expression exp : expressions) {
-                        res.set(exp.getResultField(), exp.map(cur));
+                        if (exp.isStar()) {
+                            for (Field f : type.getFields()) {
+                                res.set(f, cur.get(f));
+                            }
+                        } else {
+                            res.set(exp.getResultField(), exp.map(cur));
+                        }
                     }
 
                     return res.getRow();
                 }, resultType.getProducedType()),
-                resultType
+                resultType,
+                changeLogMode
         );
-    }
-
-    public Stream select(Map<Field,Field> mapping) {
-        RecordType resultType = type.mapped(mapping);
-
-        return map(record -> {
-            Record resRecord = new Record(record.getKind(), resultType);
-            for (Map.Entry<Field, Field> e : mapping.entrySet()) {
-                resRecord.set(e.getValue(), record.get(e.getKey()));
-            }
-            return resRecord;
-        }, resultType);
-    }
-
-    public Stream map(MapFunction<Record,Record> function, RecordType resultType) {
-        DataStream<RowData> resStream = stream.map(row -> {
-            Record input = new Record(row, type);
-            Record output = function.map(input);
-            return output.getRow();
-        }, resultType.getProducedType());
-
-        return new Stream(resStream, resultType);
     }
 
     public<T> Stream joinManyToOne(Stream right, Field key, Field<T> leftPrimaryKey) {
@@ -96,7 +110,7 @@ public class Stream implements Serializable {
                                     right.type.getProducedType()
                 ), resType.getProducedType()).name("Join N-1");
 
-        return new Stream(resStream, resType);
+        return new Stream(resStream, resType, changeLogMode);
     }
 
     private Collection<Record> defaultJoin(Record curLeft, Record curRight, Record newLeft, Record newRight, RecordType resType) {
@@ -146,10 +160,11 @@ public class Stream implements Serializable {
                 rec -> rec.get(key),
                 key.getType(),
                 (curLeft, curRight, newLeft, newRight) -> defaultJoin(curLeft, curRight, newLeft, newRight, resType),
-                resType);
+                resType,
+                changeLogMode);
     }
 
-    public<U> Stream joinOneToOne(Stream right, KeySelector<Record, U> key, TypeInformation<U> keyType, DeltaJoinFunction<Record, Record, Record> join, RecordType resType) {
+    public<U> Stream joinOneToOne(Stream right, KeySelector<Record, U> key, TypeInformation<U> keyType, DeltaJoinFunction<Record, Record, Record> join, RecordType resType, ChangeLogMode mode) {
         DataStream<RowData> resStream = stream.keyBy(row -> key.getKey(new Record(row, type)), keyType)
                 .connect(right.stream.keyBy(row -> key.getKey(new Record(row, right.type)), keyType))
                 .process(new OneToOneJoin<>(
@@ -166,7 +181,7 @@ public class Stream implements Serializable {
                         right.type.getProducedType()
                 ), resType.getProducedType()).name("Join 1-1");
 
-        return new Stream(resStream, resType);
+        return new Stream(resStream, resType, mode);
     }
 
     public Stream aggregate(Collection<Field> dimensions, Collection<Field<Double>> aggregations, long throttleMs) {
@@ -247,7 +262,7 @@ public class Stream implements Serializable {
                     }
                 }, resType.getProducedType()).name("Aggregate");
 
-        return new Stream(resStream, resType);
+        return new Stream(resStream, resType, ChangeLogMode.CHANGE_LOG);
     }
 
     public void print(String label) {
@@ -264,5 +279,9 @@ public class Stream implements Serializable {
 
     public DataStream<RowData> getDataStream() {
         return stream;
+    }
+
+    public ChangeLogMode getMode() {
+        return changeLogMode;
     }
 }

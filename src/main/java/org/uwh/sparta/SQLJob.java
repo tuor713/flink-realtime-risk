@@ -13,6 +13,8 @@ import org.uwh.flink.data.generic.*;
 
 import java.util.*;
 
+import static org.uwh.flink.data.generic.Expressions.*;
+
 public class SQLJob {
     private static final Field<String> F_ISSUER_ID = new Field<>("issuer","id", String.class, Types.STRING);
     private static final Field<String> F_ISSUER_NAME = new Field<>("issuer", "name", String.class, Types.STRING);
@@ -50,40 +52,31 @@ public class SQLJob {
         DataStream<FirmAccount> accountStream = Generators.accounts(env, Generators.NO_ACCOUNT);
         DataStream<IssuerRiskBatch> batchStream = Generators.batchRisk(env, numPositions, Generators.NO_USED_ISSUER);
 
-        RecordType issuerType = new RecordType(env.getConfig(), F_ISSUER_ID, F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_ID);
         Stream issuers = Stream.fromDataStream(
                 issuerStream,
-                issuer -> new Record(issuerType).with(F_ISSUER_ID, issuer.getSMCI()).with(F_ISSUER_NAME, issuer.getName()).with(F_ISSUER_ULTIMATE_PARENT_ID, issuer.getUltimateParentSMCI()),
-                issuerType
-        ).map(record -> {
-            if (record.get(F_ISSUER_ULTIMATE_PARENT_ID) == null) {
-                Record output = new Record(record);
-                output.set(F_ISSUER_ULTIMATE_PARENT_ID, output.get(F_ISSUER_ID));
-                return output;
-            } else {
-                return record;
-            }
-        }, new RecordType(env.getConfig(), F_ISSUER_ID, F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_ID));
+                $(Issuer::getSMCI, F_ISSUER_ID),
+                $(Issuer::getName, F_ISSUER_NAME),
+                $(it -> it.getUltimateParentSMCI()!= null ? it.getUltimateParentSMCI() : it.getSMCI(),  F_ISSUER_ULTIMATE_PARENT_ID)
+        );
 
-        Stream parentIssuer = issuers.select(Map.of(
-                F_ISSUER_ID, F_ISSUER_ULTIMATE_PARENT_ID,
-                F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_NAME
-        ));
+        Stream parentIssuer = issuers.select(
+                as(F_ISSUER_ID, F_ISSUER_ULTIMATE_PARENT_ID),
+                as(F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_NAME));
 
         Stream issuersWithParent = issuers.joinManyToOne(parentIssuer, F_ISSUER_ULTIMATE_PARENT_ID, F_ISSUER_ID);
 
-        RecordType accountType = new RecordType(env.getConfig(), F_ACCOUNT_MNEMONIC, F_ACCOUNT_STRATEGY_CODE);
         Stream accounts = Stream.fromDataStream(
                 accountStream,
-                account -> new Record(accountType).with(F_ACCOUNT_MNEMONIC, account.getMnemonic()).with(F_ACCOUNT_STRATEGY_CODE, account.getStrategyCode()),
-                accountType
+                $(FirmAccount::getMnemonic, F_ACCOUNT_MNEMONIC),
+                $(FirmAccount::getStrategyCode, F_ACCOUNT_STRATEGY_CODE)
         );
 
-        RecordType posType = new RecordType(env.getConfig(), F_POS_UID_TYPE, F_POS_UID, F_ACCOUNT_MNEMONIC, F_POS_PRODUCT_TYPE);
         Stream positions = Stream.fromDataStream(
                 posStream,
-                pos -> new Record(posType).with(F_POS_UID_TYPE, pos.getUIDType().name()).with(F_POS_UID, pos.getUID()).with(F_ACCOUNT_MNEMONIC, pos.getFirmAccountMnemonic()).with(F_POS_PRODUCT_TYPE, pos.getProductType().name()),
-                posType
+                $(pos -> pos.getUIDType().name(), F_POS_UID_TYPE),
+                $(RiskPosition::getUID, F_POS_UID),
+                $(RiskPosition::getFirmAccountMnemonic, F_ACCOUNT_MNEMONIC),
+                $(pos -> pos.getProductType().name(), F_POS_PRODUCT_TYPE)
         );
 
         Stream posWithAccount = positions.joinManyToOne(
@@ -92,11 +85,11 @@ public class SQLJob {
                 rec -> Tuple2.of(rec.get(F_POS_UID_TYPE), rec.get(F_POS_UID)),
                 new TupleTypeInfo<>(Types.STRING, Types.STRING));
 
-        RecordType batchType = new RecordType(env.getConfig(), F_POS_UID_TYPE, F_POS_UID, F_RISK_ISSUER_RISKS);
         Stream batchRisk = Stream.fromDataStream(
                 batchStream,
-                risk -> new Record(batchType).with(F_POS_UID_TYPE, risk.getUIDType().name()).with(F_POS_UID, risk.getUID()).with(F_RISK_ISSUER_RISKS, risk.getRisk()),
-                batchType
+                $(r -> r.getUIDType().name(), F_POS_UID_TYPE),
+                $(IssuerRiskBatch::getUID, F_POS_UID),
+                $(IssuerRiskBatch::getRisk, F_RISK_ISSUER_RISKS)
         );
 
         RecordType issuerRiskType = new RecordType(env.getConfig(), F_POS_UID_TYPE, F_POS_UID, F_ISSUER_ID, F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD);
@@ -106,7 +99,8 @@ public class SQLJob {
                 rec -> Tuple2.of(rec.get(F_POS_UID_TYPE), rec.get(F_POS_UID)),
                 new TupleTypeInfo<>(Types.STRING, Types.STRING),
                 (curL, curR, newL, newR) -> joinRiskAndPosition(joinType, curL, curR, newL, newR),
-                joinType);
+                joinType,
+                Stream.ChangeLogMode.CHANGE_LOG);
 
         Stream finalStream = riskWithPosition.joinManyToOne(
                 issuersWithParent,
@@ -121,17 +115,11 @@ public class SQLJob {
 
         DataStream<RiskThreshold> thresholdStream = Generators.thresholds(env, Generators.NO_ULTIMATE);
 
-        RecordType thresholdType = new RecordType(env.getConfig(), F_ISSUER_ULTIMATE_PARENT_ID, F_RISK_LIMIT_CR01_THRESHOLD, F_RISK_LIMIT_JTD_THRESHOLD);
         Stream thresholds = Stream.fromDataStream(
                 thresholdStream.filter(thres -> thres.getRiskFactorType() == RiskFactorType.Issuer),
-                thres -> {
-                    Record res = new Record(thresholdType);
-                    res.set(F_ISSUER_ULTIMATE_PARENT_ID, thres.getRiskFactor());
-                    res.set(F_RISK_LIMIT_CR01_THRESHOLD, thres.getThresholds().get(RiskMeasure.CR01.name()));
-                    res.set(F_RISK_LIMIT_JTD_THRESHOLD, thres.getThresholds().get(RiskMeasure.JTD.name()));
-                    return res;
-                },
-                thresholdType
+                $(RiskThreshold::getRiskFactor, F_ISSUER_ULTIMATE_PARENT_ID),
+                $(it -> it.getThresholds().get(RiskMeasure.CR01.name()), F_RISK_LIMIT_CR01_THRESHOLD),
+                $(it -> it.getThresholds().get(RiskMeasure.JTD.name()), F_RISK_LIMIT_JTD_THRESHOLD)
         );
 
         Stream aggWithThresholds = aggStream.joinOneToOne(thresholds, F_ISSUER_ULTIMATE_PARENT_ID);
@@ -140,11 +128,11 @@ public class SQLJob {
                 F_ISSUER_ULTIMATE_PARENT_ID,
                 F_RISK_ISSUER_CR01,
                 F_RISK_LIMIT_CR01_THRESHOLD,
-                Expressions.map(rec -> 100 * Math.abs(rec.get(F_RISK_ISSUER_CR01) / rec.get(F_RISK_LIMIT_CR01_THRESHOLD)), F_RISK_LIMIT_CR01_UTILIZATION),
+                as(rec -> 100 * Math.abs(rec.get(F_RISK_ISSUER_CR01) / rec.get(F_RISK_LIMIT_CR01_THRESHOLD)), F_RISK_LIMIT_CR01_UTILIZATION),
                 F_RISK_ISSUER_JTD,
                 F_RISK_LIMIT_JTD_THRESHOLD,
-                Expressions.map(rec -> 100 * Math.abs(rec.get(F_RISK_ISSUER_JTD) / rec.get(F_RISK_LIMIT_JTD_THRESHOLD)), F_RISK_LIMIT_JTD_UTILIZATION)
-        ).log("LIMIT", 1_000);
+                as(rec -> 100 * Math.abs(rec.get(F_RISK_ISSUER_JTD) / rec.get(F_RISK_LIMIT_JTD_THRESHOLD)), F_RISK_LIMIT_JTD_UTILIZATION)
+        ).log("LIMIT", 10);
 
         env.execute();
     }

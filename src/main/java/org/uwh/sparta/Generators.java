@@ -74,9 +74,17 @@ public class Generators {
     }
 
     private static boolean isIndex(UIDType type, int r) {
-        return type == UIDType.UITID && r % 3 == 0;
+        return type == UIDType.UITID && r % 4 == 0;
     }
 
+    /*
+    Number of results:
+    - 1/5 UIPID => 100,000
+    - 4/5 UITID
+        - 1/4 index => 12,500,000
+        - 3/4 non-index => 300,000
+     => Total: 12.9 million
+     */
     private static IssuerRiskBatch randomBatchRisk(Random r, int posLimit, int issuerLimit) {
         int id = r.nextInt(posLimit);
         Tuple2<UIDType, String> uid = generateUID(id, posLimit);

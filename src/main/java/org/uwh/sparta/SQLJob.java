@@ -108,6 +108,7 @@ public class SQLJob {
                 rec -> Tuple2.of(rec.get(F_POS_UID_TYPE), rec.get(F_POS_UID)),
                 new TupleTypeInfo<>(Types.STRING, Types.STRING));
 
+        finalStream.log("STAGE1", 100_000);
 
         // === Tier 2 logic ===
 
@@ -132,7 +133,7 @@ public class SQLJob {
                 F_RISK_ISSUER_JTD,
                 F_RISK_LIMIT_JTD_THRESHOLD,
                 as(rec -> 100 * Math.abs(rec.get(F_RISK_ISSUER_JTD) / rec.get(F_RISK_LIMIT_JTD_THRESHOLD)), F_RISK_LIMIT_JTD_UTILIZATION)
-        ).log("LIMIT", 10);
+        ).log("LIMIT", 1_000);
 
         env.execute();
     }

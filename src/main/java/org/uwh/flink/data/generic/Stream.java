@@ -344,7 +344,7 @@ public class Stream implements Serializable {
     }
 
     public void log(String label, long interval) {
-        stream.map(row -> new Record(row ,type).toString()).addSink(new LogSink<>(label, interval)).disableChaining().name("LogSink "+label);
+        stream.map(row -> new Record(row ,type).toString()).addSink(new LogSink<>(label, interval)).name("LogSink "+label);
     }
 
     public RecordType getRecordType() {

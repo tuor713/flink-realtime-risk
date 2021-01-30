@@ -64,6 +64,8 @@ public class RecordType implements Serializable, ResultTypeQueryable<RowData> {
         switch (type.getTypeRoot()) {
             case DOUBLE:
                 return data -> data.getDouble(index);
+            case BIGINT:
+                return data -> data.getLong(index);
             case VARCHAR:
                 return data -> {
                     StringData res = data.getString(index);
@@ -84,6 +86,7 @@ public class RecordType implements Serializable, ResultTypeQueryable<RowData> {
         LogicalType type = f.getLogicalType(config);
         switch (type.getTypeRoot()) {
             case DOUBLE:
+            case BIGINT:
                 return (data, value) -> data.setField(index, value);
             case VARCHAR:
                 return (data, value) -> data.setField(index, StringData.fromString((String) value));

@@ -3,10 +3,7 @@ package org.uwh.flink.data.generic;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
-import org.apache.flink.table.types.logical.DoubleType;
-import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.RawType;
-import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.flink.table.types.logical.*;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -46,6 +43,8 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
             return new VarCharType();
         } else if (getType().equals(Types.DOUBLE)) {
             return new DoubleType();
+        } else if (getType().equals(Types.LONG)) {
+            return new BigIntType();
         } else {
             return new RawType<>(clazz, type.createSerializer(config));
         }

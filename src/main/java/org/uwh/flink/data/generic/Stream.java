@@ -28,8 +28,8 @@ public class Stream implements Serializable {
         // only Insert records
         APPEND,
         // Insert, Upsert_before, Upsert_after and Delete
-        // Upsert_after and Delete
         CHANGE_LOG,
+        // Upsert_after and Delete
         KEYED_CHANGE_LOG
     }
 
@@ -55,6 +55,80 @@ public class Stream implements Serializable {
                 type,
                 ChangeLogMode.APPEND
         );
+    }
+
+    public Stream toAppendMode() {
+        if (changeLogMode == ChangeLogMode.APPEND) {
+            return this;
+        }
+
+        return new Stream(
+                stream.filter(row -> row.getRowKind() == RowKind.INSERT || row.getRowKind() == RowKind.UPDATE_AFTER)
+                        .map(row -> withKind(row, RowKind.INSERT)),
+                type,
+                ChangeLogMode.APPEND
+        );
+    }
+
+    public Stream toKeyedChangeLogMode() {
+        if (changeLogMode == ChangeLogMode.KEYED_CHANGE_LOG) {
+            return this;
+        }
+
+        return new Stream(
+                stream.filter(row -> row.getRowKind() != RowKind.UPDATE_BEFORE).map(row -> {
+                    if (row.getRowKind() == RowKind.INSERT) {
+                        return withKind(row, RowKind.UPDATE_AFTER);
+                    } else {
+                        return row;
+                    }
+                }),
+                type,
+                ChangeLogMode.KEYED_CHANGE_LOG
+        );
+    }
+
+    private RowData withKind(RowData row, RowKind kind) {
+        if (row.getRowKind() == kind) {
+            return row;
+        } else {
+            return new Record(kind, type, new Record(row, type)).getRow();
+        }
+    }
+
+    public<T> Stream toChangeLogMode(KeySelector<Record,T> primaryKey) {
+        if (changeLogMode == ChangeLogMode.CHANGE_LOG) {
+            return this;
+        }
+
+        DataStream<RowData> resStream = stream.keyBy(row -> primaryKey.getKey(new Record(row, type)))
+                .process(new KeyedProcessFunction<>() {
+                    private transient ValueState<RowData> latestState;
+
+                    @Override
+                    public void open(Configuration parameters) {
+                        latestState = getRuntimeContext().getState(new ValueStateDescriptor<>("latest", type.getProducedType()));
+                    }
+
+                    @Override
+                    public void processElement(RowData row, Context context, Collector<RowData> collector) throws Exception {
+                        RowData previous = latestState.value();
+                        latestState.update(row);
+
+                        if (previous == null) {
+                            if (row.getRowKind() != RowKind.DELETE) {
+                                collector.collect(withKind(row, RowKind.INSERT));
+                            }
+                        } else if (row.getRowKind() == RowKind.DELETE) {
+                            collector.collect(row);
+                        } else {
+                            collector.collect(withKind(previous, RowKind.UPDATE_BEFORE));
+                            collector.collect(withKind(row, RowKind.UPDATE_AFTER));
+                        }
+                    }
+                });
+
+        return new Stream(resStream, type, ChangeLogMode.CHANGE_LOG);
     }
 
     public Stream select(Expression... expressions) {

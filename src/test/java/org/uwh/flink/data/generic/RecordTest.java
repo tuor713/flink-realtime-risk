@@ -68,6 +68,21 @@ public class RecordTest {
         assertTrue(serializedLength(rec) <= 20, "Message length: "+serializedLength(rec));
     }
 
+    @Test
+    public void testMultipleFields() throws Exception {
+        RecordType type = new RecordType(config, F_POS_UID_TYPE, F_POS_UID, F_RISK_ISSUER_JTD);
+        Record rec = new Record(type).with(F_POS_UID_TYPE, UIDType.UITID).with(F_POS_UID, "123").with(F_RISK_ISSUER_JTD, 1000.0);
+
+        assertEquals(UIDType.UITID, rec.get(F_POS_UID_TYPE));
+        assertEquals("123", rec.get(F_POS_UID));
+        assertEquals(1000.0, rec.get(F_RISK_ISSUER_JTD), 0.1);
+
+        rec = serializeDeserialize(rec);
+        assertEquals(UIDType.UITID, rec.get(F_POS_UID_TYPE));
+        assertEquals("123", rec.get(F_POS_UID));
+        assertEquals(1000.0, rec.get(F_RISK_ISSUER_JTD), 0.1);
+    }
+
     private int serializedLength(Record rec) throws Exception {
         DataOutputSerializer out = new DataOutputSerializer(100);
         TypeSerializer<Record> serializer = rec.getType().createSerializer(config);

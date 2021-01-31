@@ -4,6 +4,8 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.RowKind;
 
+import java.util.Objects;
+
 public class Record {
     private final RowData data;
     private final RecordType type;
@@ -24,12 +26,16 @@ public class Record {
     }
 
     public Record(Record rec) {
-        this.data = new GenericRowData(rec.data.getArity());
+        this.data = new GenericRowData(rec.getKind(), rec.data.getArity());
         this.type = rec.type;
 
         for (Field f : type.getFields()) {
             this.set(f, rec.get(f));
         }
+    }
+
+    public Record(RowKind kind, Record rec) {
+        this(kind, rec.getType(), rec);
     }
 
     // Copy constructor but potentially narrower type
@@ -83,5 +89,25 @@ public class Record {
         }
         builder.append("}");
         return builder.toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Record record = (Record) o;
+
+        if (!type.equals(record.type)) return false;
+
+        for (Field f : type.getFields()) {
+            if (!Objects.equals(get(f), record.get(f))) return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        return data.hashCode();
     }
 }

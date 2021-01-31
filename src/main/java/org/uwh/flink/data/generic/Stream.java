@@ -7,7 +7,6 @@ import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 import org.uwh.flink.util.DeltaJoinFunction;
@@ -20,7 +19,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class Stream implements Serializable {
-    private transient final DataStream<RowData> stream;
+    private transient final DataStream<Record> stream;
     private final RecordType type;
     private final ChangeLogMode changeLogMode;
 
@@ -33,7 +32,7 @@ public class Stream implements Serializable {
         KEYED_CHANGE_LOG
     }
 
-    private Stream(DataStream<RowData> stream, RecordType type, ChangeLogMode mode) {
+    private Stream(DataStream<Record> stream, RecordType type, ChangeLogMode mode) {
         this.stream = stream;
         this.type = type;
         changeLogMode = mode;
@@ -50,8 +49,8 @@ public class Stream implements Serializable {
                         rec.set(conv.getField(), conv.map(obj));
                     }
 
-                    return rec.getRow();
-                }, type.getProducedType()),
+                    return rec;
+                }, type),
                 type,
                 ChangeLogMode.APPEND
         );
@@ -63,8 +62,8 @@ public class Stream implements Serializable {
         }
 
         return new Stream(
-                stream.filter(row -> row.getRowKind() == RowKind.INSERT || row.getRowKind() == RowKind.UPDATE_AFTER)
-                        .map(row -> withKind(row, RowKind.INSERT)),
+                stream.filter(rec -> rec.getKind() == RowKind.INSERT || rec.getKind() == RowKind.UPDATE_AFTER)
+                        .map(rec -> new Record(RowKind.INSERT, rec)),
                 type,
                 ChangeLogMode.APPEND
         );
@@ -76,11 +75,11 @@ public class Stream implements Serializable {
         }
 
         return new Stream(
-                stream.filter(row -> row.getRowKind() != RowKind.UPDATE_BEFORE).map(row -> {
-                    if (row.getRowKind() == RowKind.INSERT) {
-                        return withKind(row, RowKind.UPDATE_AFTER);
+                stream.filter(rec -> rec.getKind() != RowKind.UPDATE_BEFORE).map(rec -> {
+                    if (rec.getKind() == RowKind.INSERT) {
+                        return new Record(RowKind.UPDATE_AFTER, rec);
                     } else {
-                        return row;
+                        return rec;
                     }
                 }),
                 type,
@@ -88,42 +87,34 @@ public class Stream implements Serializable {
         );
     }
 
-    private RowData withKind(RowData row, RowKind kind) {
-        if (row.getRowKind() == kind) {
-            return row;
-        } else {
-            return new Record(kind, type, new Record(row, type)).getRow();
-        }
-    }
-
     public<T> Stream toChangeLogMode(KeySelector<Record,T> primaryKey) {
         if (changeLogMode == ChangeLogMode.CHANGE_LOG) {
             return this;
         }
 
-        DataStream<RowData> resStream = stream.keyBy(row -> primaryKey.getKey(new Record(row, type)))
+        DataStream<Record> resStream = stream.keyBy(primaryKey)
                 .process(new KeyedProcessFunction<>() {
-                    private transient ValueState<RowData> latestState;
+                    private transient ValueState<Record> latestState;
 
                     @Override
                     public void open(Configuration parameters) {
-                        latestState = getRuntimeContext().getState(new ValueStateDescriptor<>("latest", type.getProducedType()));
+                        latestState = getRuntimeContext().getState(new ValueStateDescriptor<>("latest", type));
                     }
 
                     @Override
-                    public void processElement(RowData row, Context context, Collector<RowData> collector) throws Exception {
-                        RowData previous = latestState.value();
-                        latestState.update(row);
+                    public void processElement(Record rec, Context context, Collector<Record> collector) throws Exception {
+                        Record previous = latestState.value();
+                        latestState.update(rec);
 
                         if (previous == null) {
-                            if (row.getRowKind() != RowKind.DELETE) {
-                                collector.collect(withKind(row, RowKind.INSERT));
+                            if (rec.getKind() != RowKind.DELETE) {
+                                collector.collect(new Record(RowKind.INSERT, rec));
                             }
-                        } else if (row.getRowKind() == RowKind.DELETE) {
-                            collector.collect(row);
+                        } else if (rec.getKind() == RowKind.DELETE) {
+                            collector.collect(rec);
                         } else {
-                            collector.collect(withKind(previous, RowKind.UPDATE_BEFORE));
-                            collector.collect(withKind(row, RowKind.UPDATE_AFTER));
+                            collector.collect(new Record(RowKind.UPDATE_BEFORE, previous));
+                            collector.collect(new Record(RowKind.UPDATE_AFTER, rec));
                         }
                     }
                 });
@@ -143,8 +134,7 @@ public class Stream implements Serializable {
         ).collect(Collectors.toList()));
 
         return new Stream(
-                stream.map(row -> {
-                    Record cur  = new Record(row, type);
+                stream.map(cur -> {
                     Record res = new Record(cur.getKind(), resultType);
 
                     for (Expression exp : expressions) {
@@ -157,8 +147,8 @@ public class Stream implements Serializable {
                         }
                     }
 
-                    return res.getRow();
-                }, resultType.getProducedType()),
+                    return res;
+                }, resultType),
                 resultType,
                 changeLogMode
         );
@@ -174,15 +164,15 @@ public class Stream implements Serializable {
 
     public<U,V> Stream joinManyToOne(Stream right, KeySelector<Record, U> key, TypeInformation<U> keyType, KeySelector<Record, V> leftPrimaryKey, TypeInformation<V> leftPrimaryKeyType) {
         RecordType resType = type.join(right.type);
-        DataStream<RowData> resStream = stream.keyBy(row -> key.getKey(new Record(row, type)), keyType)
-                .connect(right.stream.keyBy(row -> key.getKey(new Record(row, right.type)), keyType))
+        DataStream<Record> resStream = stream.keyBy(key, keyType)
+                .connect(right.stream.keyBy(key, keyType))
                 .process(new ManyToOneJoin<>(
-                            (currentLeft, currentRight, newLeft, newRight) -> defaultJoin(currentLeft, currentRight, newLeft, newRight, type, right.type, resType),
-                                    type.getProducedType(),
+                            (currentLeft, currentRight, newLeft, newRight) -> defaultJoin(currentLeft, currentRight, newLeft, newRight, resType),
+                                    type,
                                     leftPrimaryKeyType,
-                                    row -> leftPrimaryKey.getKey(new Record(row, type)),
-                                    right.type.getProducedType()
-                ), resType.getProducedType()).name("Join N-1");
+                                    leftPrimaryKey,
+                                    right.type
+                ), resType).name("Join N-1");
 
         return new Stream(resStream, resType, changeLogMode);
     }
@@ -215,18 +205,6 @@ public class Stream implements Serializable {
         return Collections.singleton(output);
     }
 
-    private Collection<RowData> defaultJoin(RowData curLeft, RowData curRight, RowData newLeft, RowData newRight, RecordType leftType, RecordType rightType, RecordType resType) {
-        Collection<Record> res = defaultJoin(
-                (curLeft != null) ? new Record(curLeft, leftType) : null,
-                (curRight != null) ? new Record(curRight, rightType) : null,
-                (newLeft != null) ? new Record(newLeft, leftType) : null,
-                (newRight != null) ? new Record(newRight, rightType) : null,
-                resType
-        );
-
-        return res.stream().map(Record::getRow).collect(Collectors.toList());
-    }
-
     public<T> Stream joinOneToOne(Stream right, Field<T> key) {
         RecordType resType = type.join(right.type);
         return joinOneToOne(
@@ -239,21 +217,9 @@ public class Stream implements Serializable {
     }
 
     public<U> Stream joinOneToOne(Stream right, KeySelector<Record, U> key, TypeInformation<U> keyType, DeltaJoinFunction<Record, Record, Record> join, RecordType resType, ChangeLogMode mode) {
-        DataStream<RowData> resStream = stream.keyBy(row -> key.getKey(new Record(row, type)), keyType)
-                .connect(right.stream.keyBy(row -> key.getKey(new Record(row, right.type)), keyType))
-                .process(new OneToOneJoin<>(
-                        (curLeft, curRight, newLeft, newRight) -> {
-                            Collection<Record> res = join.join(
-                                    (curLeft != null) ? new Record(curLeft, type) : null,
-                                    (curRight != null) ? new Record(curRight, right.type) : null,
-                                    (newLeft != null) ? new Record(newLeft, type) : null,
-                                    (newRight != null) ? new Record(newRight, right.type) : null
-                            );
-                            return res.stream().map(Record::getRow).collect(Collectors.toList());
-                        },
-                        type.getProducedType(),
-                        right.type.getProducedType()
-                ), resType.getProducedType()).name("Join 1-1");
+        DataStream<Record> resStream = stream.keyBy(key, keyType)
+                .connect(right.stream.keyBy(key, keyType))
+                .process(new OneToOneJoin<>(join, type, right.type), resType).name("Join 1-1");
 
         return new Stream(resStream, resType, mode);
     }
@@ -264,22 +230,21 @@ public class Stream implements Serializable {
         RecordType dimType = new RecordType(type.getConfig(), dimensions);
         RecordType resType = new RecordType(type.getConfig(), resFields);
 
-        DataStream<RowData> resStream = stream.keyBy(row -> new Record(RowKind.INSERT, dimType, new Record(row, type)).getRow(), dimType.getProducedType())
+        DataStream<Record> resStream = stream.keyBy(rec -> new Record(RowKind.INSERT, dimType, rec), dimType)
                 .process(new KeyedProcessFunction<>() {
-                    private transient ValueState<RowData> pending;
-                    private transient ValueState<RowData> lastPublished;
+                    private transient ValueState<Record> pending;
+                    private transient ValueState<Record> lastPublished;
 
                     @Override
                     public void open(Configuration parameters) {
-                        pending = getRuntimeContext().getState(new ValueStateDescriptor<>("pending", resType.getProducedType()));
-                        lastPublished = getRuntimeContext().getState(new ValueStateDescriptor<>("lastPublished", resType.getProducedType()));
+                        pending = getRuntimeContext().getState(new ValueStateDescriptor<>("pending", resType));
+                        lastPublished = getRuntimeContext().getState(new ValueStateDescriptor<>("lastPublished", resType));
                     }
 
                     @Override
-                    public void onTimer(long timestamp, OnTimerContext ctx, Collector<RowData> out) throws Exception {
-                        Record next = new Record(pending.value(), resType);
-                        RowData lastRow = lastPublished.value();
-                        Record last = (lastRow != null) ? new Record(lastPublished.value(), resType) : null;
+                    public void onTimer(long timestamp, OnTimerContext ctx, Collector<Record> out) throws Exception {
+                        Record next = pending.value();
+                        Record last = lastPublished.value();
 
                         pending.clear();
 
@@ -290,32 +255,32 @@ public class Stream implements Serializable {
                             } else {
                                 // retract previous record, clear state
                                 lastPublished.clear();
-                                out.collect(new Record(RowKind.DELETE, resType, last).getRow());
+                                out.collect(new Record(RowKind.DELETE, resType, last));
                             }
                         } else if (last == null) {
                             Record publish = new Record(RowKind.INSERT, resType, next);
-                            lastPublished.update(publish.getRow());
-                            out.collect(publish.getRow());
+                            lastPublished.update(publish);
+                            out.collect(publish);
                         } else {
                             // retract previous value, inject new value
                             Record retract = new Record(RowKind.UPDATE_BEFORE, resType, last);
                             Record upsert = new Record(RowKind.UPDATE_AFTER, resType, next);
-                            lastPublished.update(upsert.getRow());
-                            out.collect(retract.getRow());
-                            out.collect(upsert.getRow());
+                            lastPublished.update(upsert);
+                            out.collect(retract);
+                            out.collect(upsert);
                         }
                     }
 
                     @Override
-                    public void processElement(RowData rowData, Context context, Collector<RowData> collector) throws Exception {
-                        RowData last = pending.value();
+                    public void processElement(Record rec, Context context, Collector<Record> collector) throws Exception {
+                        Record last = pending.value();
                         if (last == null) {
                             last = lastPublished.value();
                             context.timerService().registerProcessingTimeTimer(context.timerService().currentProcessingTime()+throttleMs);
                         }
 
-                        Record res = update(last != null ? new Record(last, resType) : null, new Record(rowData, type));
-                        pending.update(res.getRow());
+                        Record res = update(last, rec);
+                        pending.update(res);
                     }
 
                     private Record update(Record current, Record next) {
@@ -334,24 +299,24 @@ public class Stream implements Serializable {
 
                         return res;
                     }
-                }, resType.getProducedType()).name("Aggregate");
+                }, resType).name("Aggregate");
 
         return new Stream(resStream, resType, ChangeLogMode.CHANGE_LOG);
     }
 
     public void print(String label) {
-        stream.map(row -> new Record(row, type).toString()).print(label);
+        stream.map(Record::toString).print(label);
     }
 
     public void log(String label, long interval) {
-        stream.map(row -> new Record(row ,type).toString()).addSink(new LogSink<>(label, interval)).name("LogSink "+label);
+        stream.addSink(new LogSink<>(label, interval)).name("LogSink "+label);
     }
 
     public RecordType getRecordType() {
         return type;
     }
 
-    public DataStream<RowData> getDataStream() {
+    public DataStream<Record> getDataStream() {
         return stream;
     }
 

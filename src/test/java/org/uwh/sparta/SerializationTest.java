@@ -43,7 +43,7 @@ public class SerializationTest {
         System.out.println("POJO: " + serializedLength(new IssuerPOJO("1", "Issuer 1", "1"), TypeInformation.of(IssuerPOJO.class)));
 
         RecordType type = new RecordType(config, F_ISSUER_ID, F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_ID);
-        System.out.println("RowData: " + serializedLength(new Record(type).with(F_ISSUER_ID, "1").with(F_ISSUER_NAME, "Issuer 1").with(F_ISSUER_ULTIMATE_PARENT_ID, "1").getRow(), type.getProducedType()));
+        System.out.println("RowData: " + serializedLength(new Record(type).with(F_ISSUER_ID, "1").with(F_ISSUER_NAME, "Issuer 1").with(F_ISSUER_ULTIMATE_PARENT_ID, "1"), type));
 
         System.out.println("=== Issuer Risk ===");
         System.out.println("Avro: " + serializedLength(
@@ -66,9 +66,8 @@ public class SerializationTest {
                             .with(F_CLOSEDATE, "20201231")
                             .with(F_RISK_ISSUER_CR01, 100.0)
                             .with(F_RISK_ISSUER_JTD, 1000000.0)
-                            .with(F_AUDIT_DATE_TIME, System.currentTimeMillis())
-                            .getRow(),
-                        type.getProducedType()
+                            .with(F_AUDIT_DATE_TIME, System.currentTimeMillis()),
+                        type
                 )
         );
     }

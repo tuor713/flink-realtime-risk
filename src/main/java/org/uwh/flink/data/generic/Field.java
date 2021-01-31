@@ -45,6 +45,8 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
             return new DoubleType();
         } else if (getType().equals(Types.LONG)) {
             return new BigIntType();
+        } else if (clazz.isEnum()) {
+            return new TinyIntType();
         } else {
             return new RawType<>(clazz, type.createSerializer(config));
         }

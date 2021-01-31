@@ -3,21 +3,18 @@ package org.uwh.flink.data.generic;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RawValueData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.binary.BinaryRawValueData;
-import org.apache.flink.table.runtime.typeutils.RowDataTypeInfo;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RawType;
 
 import java.io.Serializable;
 import java.util.*;
-import java.util.stream.Collectors;
 
-public class RecordType implements Serializable, ResultTypeQueryable<RowData> {
+public class RecordType extends TypeInformation<Record> {
     // TODO Add distinction between mandatory and optional fields
     @SuppressWarnings("rawtypes")
     private final TreeSet<Field> fields = new TreeSet<>();
@@ -71,6 +68,14 @@ public class RecordType implements Serializable, ResultTypeQueryable<RowData> {
                     StringData res = data.getString(index);
                     return (res != null) ? res.toString() : null;
                 };
+            case TINYINT:
+                if (f.getTypeClass().isEnum()) {
+                    Class<Enum> clazz = f.getTypeClass();
+                    Enum[] values = clazz.getEnumConstants();
+                    return data -> values[data.getByte(index)];
+                } else {
+                    return data -> data.getByte(index);
+                }
             case RAW:
                 TypeSerializer serializer = ((RawType) type).getTypeSerializer();
                 return data -> {
@@ -88,6 +93,18 @@ public class RecordType implements Serializable, ResultTypeQueryable<RowData> {
             case DOUBLE:
             case BIGINT:
                 return (data, value) -> data.setField(index, value);
+            case TINYINT:
+                if (f.getTypeClass().isEnum()) {
+                    EnumMap mapping = new EnumMap(f.getTypeClass());
+                    byte i = 0;
+                    for (Enum val : (Enum[]) f.getTypeClass().getEnumConstants()) {
+                        mapping.put(val, i++);
+                    }
+
+                    return (data, value) -> data.setField(index, mapping.get(value));
+                } else {
+                    return (data, value) -> data.setField(index, value);
+                }
             case VARCHAR:
                 return (data, value) -> data.setField(index, StringData.fromString((String) value));
             case RAW:
@@ -110,13 +127,6 @@ public class RecordType implements Serializable, ResultTypeQueryable<RowData> {
         return Collections.unmodifiableNavigableSet(fields);
     }
 
-    @Override
-    public TypeInformation<RowData> getProducedType() {
-        return new RowDataTypeInfo(
-            fields.stream().map(f -> f.getLogicalType(config)).collect(Collectors.toList()).toArray(new LogicalType[0])
-        );
-    }
-
     public int indexOf(Field f) {
         return indices.get(f);
     }
@@ -130,5 +140,64 @@ public class RecordType implements Serializable, ResultTypeQueryable<RowData> {
 
     public ExecutionConfig getConfig() {
         return config;
+    }
+
+    @Override
+    public boolean isBasicType() {
+        return false;
+    }
+
+    @Override
+    public boolean isTupleType() {
+        return true;
+    }
+
+    @Override
+    public int getArity() {
+        return fields.size();
+    }
+
+    @Override
+    public int getTotalFields() {
+        return fields.size();
+    }
+
+    @Override
+    public Class<Record> getTypeClass() {
+        return Record.class;
+    }
+
+    @Override
+    public boolean isKeyType() {
+        return false;
+    }
+
+    @Override
+    public TypeSerializer<Record> createSerializer(ExecutionConfig executionConfig) {
+        return new RecordSerializer(config, this);
+    }
+
+    @Override
+    public String toString() {
+        return "Record["+fields+"]";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof RecordType)) {
+            return false;
+        } else {
+            return fields.equals(((RecordType) o).fields);
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        return fields.hashCode();
+    }
+
+    @Override
+    public boolean canEqual(Object o) {
+        return o instanceof Record;
     }
 }

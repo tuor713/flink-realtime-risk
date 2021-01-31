@@ -11,6 +11,8 @@ public class LogSink<T> extends RichSinkFunction<T> {
     private long interval;
     private transient long count = 0;
     private transient long firstRecord = -1;
+    private transient long lastLog = -1;
+    private transient long curCount = 0;
 
     public LogSink(String label, long interval) {
         this.interval = interval;
@@ -23,16 +25,25 @@ public class LogSink<T> extends RichSinkFunction<T> {
         firstRecord = -1;
     }
 
+
+
     @Override
     public void invoke(T value) throws Exception {
         if (firstRecord == -1) {
             firstRecord = System.currentTimeMillis();
+            lastLog = firstRecord;
         }
 
         count++;
+        curCount++;
+
         if (count % interval == 0) {
-            double tps = ((double) 1000 * count) / (System.currentTimeMillis()-firstRecord);
-            logger.info(label + "[" + getRuntimeContext().getIndexOfThisSubtask() + "] TPS: " + String.format("%,.0f", tps) + " => " + value);
+            long now = System.currentTimeMillis();
+            double tps = ((double) 1000 * count) / (now-firstRecord);
+            double lastTps = ((double) 1000 * curCount) / (now - lastLog);
+            lastLog = now;
+            curCount = 0;
+            logger.info(label + "[" + getRuntimeContext().getIndexOfThisSubtask() + "] TPS: " + String.format("%,.0f", lastTps) + "/" + String.format("%,.0f", tps) + " => " + value);
         }
     }
 }

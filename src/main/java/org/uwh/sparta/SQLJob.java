@@ -108,7 +108,7 @@ public class SQLJob {
                 rec -> Tuple2.of(rec.get(F_POS_UID_TYPE), rec.get(F_POS_UID)),
                 new TupleTypeInfo<>(Types.STRING, Types.STRING));
 
-        finalStream.log("STAGE1", 100_000);
+        finalStream.log("STAGE1", 500_000);
 
         // === Tier 2 logic ===
 

@@ -21,6 +21,10 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
         this.type = type;
     }
 
+    public Field(String namespace, String name, TypeInformation<T> type) {
+        this(namespace, name, type.getTypeClass(), type);
+    }
+
     public Field(String namespace, String name, Field<T> parent) {
         this(namespace, name, parent.getTypeClass(), parent.getType());
     }

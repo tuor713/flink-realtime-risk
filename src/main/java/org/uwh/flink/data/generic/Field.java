@@ -87,4 +87,9 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
     public int hashCode() {
         return Objects.hash(namespace, name);
     }
+
+    @Override
+    public String toString() {
+        return namespace + "/" + name;
+    }
 }

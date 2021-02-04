@@ -60,11 +60,12 @@ public class RecordType extends TypeInformation<Record> {
         LogicalType type = f.getLogicalType(config);
         switch (type.getTypeRoot()) {
             case DOUBLE:
-                return data -> data.getDouble(index);
+                return data -> data.isNullAt(index) ? null : data.getDouble(index);
             case BIGINT:
-                return data -> data.getLong(index);
+                return data -> data.isNullAt(index) ? null : data.getLong(index);
             case VARCHAR:
                 return data -> {
+                    if (data.isNullAt(index)) return null;
                     StringData res = data.getString(index);
                     return (res != null) ? res.toString() : null;
                 };
@@ -72,13 +73,14 @@ public class RecordType extends TypeInformation<Record> {
                 if (f.getTypeClass().isEnum()) {
                     Class<Enum> clazz = f.getTypeClass();
                     Enum[] values = clazz.getEnumConstants();
-                    return data -> values[data.getByte(index)];
+                    return data -> data.isNullAt(index) ? null : values[data.getByte(index)];
                 } else {
-                    return data -> data.getByte(index);
+                    return data -> data.isNullAt(index) ? null : data.getByte(index);
                 }
             case RAW:
                 TypeSerializer serializer = ((RawType) type).getTypeSerializer();
                 return data -> {
+                    if (data.isNullAt(index)) return null;
                     RawValueData res = data.getRawValue(index);
                     return (res != null) ? res.toObject(serializer) : null;
                 };

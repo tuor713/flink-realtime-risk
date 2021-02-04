@@ -10,6 +10,8 @@ import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
 import org.uwh.UIDType;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,6 +59,23 @@ public class RecordTest {
         assertEquals("BOOK:123", rec.get(F_POS_UID));
 
         assertTrue(serializedLength(rec) <= 30, "Message length: "+serializedLength(rec));
+    }
+
+    @Test
+    public void testNullFields() throws Exception {
+        List<Field> fields = List.of(F_RISK_ISSUER_JTD, F_POS_UID, F_AUDIT_DATE_TIME, F_POS_UID_TYPE);
+
+        for (Field field : fields) {
+            RecordType type = new RecordType(config, field);
+            Record rec = new Record(type);
+            assertEquals(null, rec.get(field), "Uninitialized record of field " + field + " is not null");
+
+            rec.set(field, null);
+            assertEquals(null, rec.get(field), "Explicitly record of field " + field + " is not null");
+
+            rec = serializeDeserialize(rec);
+            assertEquals(null, rec.get(field), "Round-tripped record of field " + field + " is not null");
+        }
     }
 
     @Test

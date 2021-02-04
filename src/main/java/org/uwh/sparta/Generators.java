@@ -58,8 +58,7 @@ public class Generators {
         return r.nextDouble()*2000000-1000000;
     }
 
-    private static IssuerRisk randomRisk(Random r, int posLimit, int issuerLimit) {
-        int tradeId = r.nextInt(posLimit);
+    private static IssuerRisk randomRisk(Random r, int tradeId, int posLimit, int issuerLimit) {
         int issuerId;
 
         if (tradeId % 2 == 0) {
@@ -71,6 +70,11 @@ public class Generators {
         Tuple2<UIDType,String> uid = generateUID(tradeId, posLimit);
 
         return new IssuerRisk(uid.f0, uid.f1, String.valueOf(issuerId), COB, randomCR01(r), randomJTD(r), System.currentTimeMillis());
+    }
+
+    private static IssuerRisk randomRisk(Random r, int posLimit, int issuerLimit) {
+        int tradeId = r.nextInt(posLimit);
+        return randomRisk(r, tradeId, posLimit, issuerLimit);
     }
 
     private static boolean isIndex(UIDType type, int r) {
@@ -127,6 +131,12 @@ public class Generators {
 
     public static Iterator<IssuerRisk> issuerRisk(int posLimit, int issuerLimit) {
         return new GeneratorIterator<>(new IssuerRiskGen(posLimit, issuerLimit));
+    }
+
+    public static DataStream<IssuerRisk> oneTimeIssuerRisk(StreamExecutionEnvironment env, int posLimit, int issuerLimit) {
+        Random r = new Random();
+        List<IssuerRisk> risks = IntStream.range(0, posLimit).mapToObj(id -> randomRisk(r, id, posLimit, issuerLimit)).collect(Collectors.toList());
+        return env.fromCollection(risks);
     }
 
     public static DataStream<IssuerRisk> issuerRisk(StreamExecutionEnvironment env, int posLimit, int issuerLimit) {

@@ -11,14 +11,18 @@ import java.util.Objects;
 public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<T> {
     private final String namespace;
     private final String name;
+    private final String fullName;
     private final Class<T> clazz;
     private final TypeInformation<T> type;
+    private final int hashCode;
 
     public Field(String namespace, String name, Class<T> clazz, TypeInformation<T> type) {
         this.namespace = namespace;
         this.name = name;
         this.clazz = clazz;
         this.type = type;
+        this.fullName = namespace + "_" + name;
+        this.hashCode = Objects.hash(namespace, name);
     }
 
     public Field(String namespace, String name, TypeInformation<T> type) {
@@ -35,6 +39,10 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
 
     public String getName() {
         return name;
+    }
+
+    public String getFullFieldName() {
+        return fullName;
     }
 
     public TypeInformation<T> getType() {
@@ -85,7 +93,7 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
 
     @Override
     public int hashCode() {
-        return Objects.hash(namespace, name);
+        return hashCode;
     }
 
     @Override

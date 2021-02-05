@@ -1,4 +1,4 @@
-# Sparta in Flink 
+# Real Time Issuer Risk in Flink 
 
 ## Approach 
 Handle all logic in one workflow, use Flink for latest statement management.
@@ -26,7 +26,7 @@ Is there a point to try to use broadcast streams
 #### Alternatively how do we extract a full set of consistent data
 For example, can we use a broadcast stream
 
-#### How to join issuer, accounst and products?
+#### How to join issuer, accounts and products?
 
 #### How to implement complex business logic such as limits
 

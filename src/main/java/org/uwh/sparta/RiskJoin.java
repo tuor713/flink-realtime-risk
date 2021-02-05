@@ -1,7 +1,6 @@
 package org.uwh.sparta;
 
 import org.apache.flink.api.common.state.*;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
@@ -48,7 +47,7 @@ public class RiskJoin extends KeyedBroadcastProcessFunction<String, Either<Recor
     }
 
     @Override
-    public TypeInformation<Record> getProducedType() {
+    public RecordType getProducedType() {
         return resType;
     }
 

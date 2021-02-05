@@ -1,25 +1,28 @@
 package org.uwh.sparta;
 
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.EitherTypeInfo;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.types.RowKind;
+import org.apache.flink.streaming.api.functions.source.FromElementsFunction;
+import org.apache.flink.types.Either;
 import org.uwh.*;
-import org.uwh.flink.data.generic.Field;
 import org.uwh.flink.data.generic.Record;
-import org.uwh.flink.data.generic.RecordType;
 import org.uwh.flink.data.generic.Stream;
+import org.uwh.flink.util.DelayedParallelSource;
+import org.uwh.flink.util.DelayedSource;
 
-import java.util.*;
+import java.util.List;
 
 import static org.uwh.flink.data.generic.Expressions.$;
 import static org.uwh.flink.data.generic.Expressions.as;
 import static org.uwh.sparta.Fields.*;
 
-public class SQLJob {
+public class MainJob {
 
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment.setDefaultLocalParallelism(4);
@@ -29,10 +32,22 @@ public class SQLJob {
         env.getConfig().disableGenericTypes();
 
         int numPositions = 500_000;
-        DataStream<RiskPosition> posStream = Generators.positions(env, numPositions, Generators.NO_USED_ACCOUNT);
+
+        /*
+        Need to delay the main firehoses so that ref data, particularly issuers, can be loaded first. Otherwise the broadcast side of the join is very slow (involving iteration).
+         */
+        int delayMs = 10_000;
+        List<RiskPosition> posList = Generators.positionList(numPositions, Generators.NO_USED_ACCOUNT);
+        DataStream<RiskPosition> posStream = env.addSource(new DelayedSource<>(
+                new FromElementsFunction<>(TypeInformation.of(RiskPosition.class).createSerializer(env.getConfig()), posList),
+                TypeInformation.of(RiskPosition.class), delayMs));
+        DataStream<IssuerRiskBatch> batchStream = env.addSource(new DelayedParallelSource<>(
+                Generators.batchRisk(numPositions, Generators.NO_USED_ISSUER),
+                TypeInformation.of(IssuerRiskBatch.class),
+                delayMs));
+
         DataStream<Issuer> issuerStream = Generators.issuers(env, Generators.NO_ISSUER, Generators.NO_ULTIMATE);
         DataStream<FirmAccount> accountStream = Generators.accounts(env, Generators.NO_ACCOUNT);
-        DataStream<IssuerRiskBatch> batchStream = Generators.batchRisk(env, numPositions, Generators.NO_USED_ISSUER);
 
         Stream issuers = Stream.fromDataStream(
                 issuerStream,
@@ -74,21 +89,20 @@ public class SQLJob {
                 $(IssuerRiskBatch::getRisk, F_RISK_ISSUER_RISKS)
         );
 
-        RecordType issuerRiskType = new RecordType(env.getConfig(), F_POS_UID_TYPE, F_POS_UID, F_ISSUER_ID, F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD);
-        RecordType joinType = issuerRiskType.join(posWithAccount.getRecordType());
-        Stream riskWithPosition = batchRisk.joinOneToOne(
-                posWithAccount,
-                rec -> Tuple2.of(rec.get(F_POS_UID_TYPE), rec.get(F_POS_UID)),
-                new TupleTypeInfo<>(Types.STRING, Types.STRING),
-                (curL, curR, newL, newR) -> joinRiskAndPosition(joinType, curL, curR, newL, newR),
-                joinType,
-                Stream.ChangeLogMode.CHANGE_LOG);
+        RiskJoin join = new RiskJoin(batchRisk.getRecordType(), positions.getRecordType(), issuersWithParent.getRecordType());
 
-        Stream finalStream = riskWithPosition.joinManyToOne(
-                issuersWithParent,
-                F_ISSUER_ID,
-                rec -> Tuple2.of(rec.get(F_POS_UID_TYPE), rec.get(F_POS_UID)),
-                new TupleTypeInfo<>(Types.STRING, Types.STRING));
+        DataStream<Record> finalDataStream = batchRisk
+                .getDataStream()
+                .map(rec -> Either.Left(rec), new EitherTypeInfo<>(batchRisk.getRecordType(), positions.getRecordType()))
+                .union(positions.getDataStream().map(rec -> Either.Right(rec), new EitherTypeInfo<>(batchRisk.getRecordType(), positions.getRecordType())))
+                .keyBy(t -> {
+                    Record rec = t.isLeft() ? t.left() : t.right();
+                    return rec.get(Fields.F_POS_UID_TYPE)+":"+rec.get(Fields.F_POS_UID);
+                })
+                .connect(issuersWithParent.getDataStream().broadcast(join.getMapStateDescriptor()))
+                .process(join);
+
+        Stream finalStream = new Stream(finalDataStream, join.getProducedType(), Stream.ChangeLogMode.CHANGE_LOG);
 
         finalStream.log("STAGE1", 500_000);
 
@@ -118,60 +132,5 @@ public class SQLJob {
         ).log("LIMIT", 1_000);
 
         env.execute();
-    }
-
-    private static Collection<Record> joinRiskAndPosition(RecordType joinType, Record curRisk, Record curPosition, Record newRisk, Record newPosition) {
-        List<Record> res = new ArrayList<>();
-        if (newPosition != null) {
-            // Position update
-            for (IssuerRiskLine risk : curRisk.get(F_RISK_ISSUER_RISKS)) {
-                if (curPosition != null) {
-                    res.add(joinRecord(RowKind.UPDATE_BEFORE, joinType, risk, curPosition));
-                    res.add(joinRecord(RowKind.UPDATE_AFTER, joinType, risk, newPosition));
-                } else {
-                    res.add(joinRecord(RowKind.INSERT, joinType, risk, newPosition));
-                }
-            }
-        } else {
-            // Risk update
-            Set<String> newIssuers = new HashSet<>();
-            newRisk.get(F_RISK_ISSUER_RISKS).forEach(risk -> newIssuers.add(risk.getSMCI()));
-
-            Set<String> oldIssuers = new HashSet<>();
-            if (curRisk != null) {
-                for (IssuerRiskLine risk : curRisk.get(F_RISK_ISSUER_RISKS)) {
-                    oldIssuers.add(risk.getSMCI());
-                    res.add(joinRecord(
-                            newIssuers.contains(risk.getSMCI()) ? RowKind.UPDATE_BEFORE : RowKind.DELETE,
-                            joinType,
-                            risk,
-                            curPosition
-                    ));
-                }
-            }
-
-            for (IssuerRiskLine risk : newRisk.get(F_RISK_ISSUER_RISKS)) {
-                res.add(joinRecord(
-                        oldIssuers.contains(risk.getSMCI()) ? RowKind.UPDATE_AFTER : RowKind.INSERT,
-                        joinType,
-                        risk,
-                        curPosition
-                ));
-            }
-        }
-
-        return res;
-    }
-
-    private static Record joinRecord(RowKind kind, RecordType joinType, IssuerRiskLine risk, Record position) {
-        Record res = new Record(kind, joinType);
-
-        for (Field f : position.getType().getFields()) {
-            res.set(f, position.get(f));
-        }
-
-        return res.with(F_ISSUER_ID, risk.getSMCI())
-                .with(F_RISK_ISSUER_CR01, risk.getCR01())
-                .with(F_RISK_ISSUER_JTD, risk.getJTD());
     }
 }

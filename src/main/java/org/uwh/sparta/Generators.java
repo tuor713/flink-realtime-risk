@@ -164,8 +164,8 @@ public class Generators {
         return env.fromCollection(risks);
     }
 
-    public static DataStream<IssuerRiskBatch> batchRisk(StreamExecutionEnvironment env, int posLimit, int issuerLimit) {
-        return env.addSource(new RichParallelSourceFunction<IssuerRiskBatch>() {
+    public static RichParallelSourceFunction<IssuerRiskBatch> batchRisk(int posLimit, int issuerLimit) {
+        return new RichParallelSourceFunction<>() {
             @Override
             public void run(SourceContext<IssuerRiskBatch> sourceContext) {
                 Random r = new Random();
@@ -176,7 +176,11 @@ public class Generators {
 
             @Override
             public void cancel() {}
-        }).name("Issuer RIsk");
+        };
+    }
+
+    public static DataStream<IssuerRiskBatch> batchRisk(StreamExecutionEnvironment env, int posLimit, int issuerLimit) {
+        return env.addSource(batchRisk(posLimit, issuerLimit)).name("Issuer Risk");
     }
 
     public static List<RiskPosition> positionList(int limit, int noAccounts) {

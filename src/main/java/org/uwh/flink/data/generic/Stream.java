@@ -32,7 +32,7 @@ public class Stream implements Serializable {
         KEYED_CHANGE_LOG
     }
 
-    private Stream(DataStream<Record> stream, RecordType type, ChangeLogMode mode) {
+    public Stream(DataStream<Record> stream, RecordType type, ChangeLogMode mode) {
         this.stream = stream;
         this.type = type;
         changeLogMode = mode;

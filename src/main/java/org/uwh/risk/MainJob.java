@@ -89,12 +89,12 @@ public class MainJob {
                 $(IssuerRiskBatch::getRisk, F_RISK_ISSUER_RISKS)
         );
 
-        RiskJoin join = new RiskJoin(batchRisk.getRecordType(), positions.getRecordType(), issuersWithParent.getRecordType());
+        RiskJoin join = new RiskJoin(batchRisk.getRecordType(), posWithAccount.getRecordType(), issuersWithParent.getRecordType());
 
         DataStream<Record> finalDataStream = batchRisk
                 .getDataStream()
-                .map(rec -> Either.Left(rec), new EitherTypeInfo<>(batchRisk.getRecordType(), positions.getRecordType()))
-                .union(positions.getDataStream().map(rec -> Either.Right(rec), new EitherTypeInfo<>(batchRisk.getRecordType(), positions.getRecordType())))
+                .map(rec -> Either.Left(rec), new EitherTypeInfo<>(batchRisk.getRecordType(), posWithAccount.getRecordType()))
+                .union(posWithAccount.getDataStream().map(rec -> Either.Right(rec), new EitherTypeInfo<>(batchRisk.getRecordType(), posWithAccount.getRecordType())))
                 .keyBy(t -> {
                     Record rec = t.isLeft() ? t.left() : t.right();
                     return rec.get(Fields.F_POS_UID_TYPE)+":"+rec.get(Fields.F_POS_UID);

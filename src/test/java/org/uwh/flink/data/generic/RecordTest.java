@@ -102,6 +102,20 @@ public class RecordTest {
         assertEquals(1000.0, rec.get(F_RISK_ISSUER_JTD), 0.1);
     }
 
+    @Test
+    public void testNestedRecords() throws Exception {
+        RecordType innerType = new RecordType(config, F_POS_UID_TYPE, F_POS_UID, F_RISK_ISSUER_JTD);
+        Field<Record> innerField = new Field<>("record", "inner", innerType);
+        RecordType outerType = new RecordType(config, innerField);
+        Record inner = new Record(innerType).with(F_POS_UID_TYPE, UIDType.UIPID).with(F_POS_UID,"123").with(F_RISK_ISSUER_JTD,1000.0);
+        Record outer = new Record(outerType).with(innerField, inner);
+
+        assertEquals("123", outer.get(innerField).get(F_POS_UID));
+
+        outer = serializeDeserialize(outer);
+        assertEquals("123", outer.get(innerField).get(F_POS_UID));
+    }
+
     private int serializedLength(Record rec) throws Exception {
         DataOutputSerializer out = new DataOutputSerializer(100);
         TypeSerializer<Record> serializer = rec.getType().createSerializer(config);

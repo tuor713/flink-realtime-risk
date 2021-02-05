@@ -1,5 +1,8 @@
 package org.uwh.risk;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -7,6 +10,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.core.memory.DataOutputSerializer;
+import org.apache.flink.formats.avro.typeutils.AvroSerializer;
 import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
 import org.uwh.Issuer;
@@ -15,6 +19,8 @@ import org.uwh.UIDType;
 import org.uwh.flink.data.generic.Field;
 import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.RecordType;
+
+import java.util.List;
 
 public class SerializationTest {
     private static final Field<String> F_ISSUER_ID = new Field<>("issuer","id", String.class, Types.STRING);
@@ -34,11 +40,28 @@ public class SerializationTest {
         ExecutionConfig config = new ExecutionConfig();
         config.disableGenericTypes();
 
+        // Avro serialization is about 70% size of RowData
+        // POJO is a little bit smaller still
+
         System.out.println("=== Issuer ===");
         System.out.println("Avro: " + serializedLength(new Issuer("1","Issuer 1","1"), TypeInformation.of(Issuer.class)));
         System.out.println("Tuple[RowKind,Avro]: " +
                 serializedLength(Tuple2.of(RowKind.INSERT, new Issuer("1","Issuer 1","1")),
                         new TupleTypeInfo<>(TypeInformation.of(RowKind.class), TypeInformation.of(Issuer.class))));
+
+        Schema schema = Schema.createRecord("record", "", "", false, List.of(
+                new Schema.Field("RowKind", Schema.create(Schema.Type.INT)),
+                new Schema.Field("SMCI", Schema.create(Schema.Type.STRING)),
+                new Schema.Field("Name", Schema.create(Schema.Type.STRING)),
+                new Schema.Field("UltimateParentSMCI", Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)))
+        ));
+        AvroSerializer<GenericRecord> serializer = new AvroSerializer<>(GenericRecord.class, schema);
+        GenericRecord rec = new GenericData.Record(schema);
+        rec.put("RowKind", RowKind.INSERT.toByteValue());
+        rec.put("SMCI", "1");
+        rec.put("Name", "Issuer 1");
+        rec.put("UltimateParentSMCI", "1");
+        System.out.println("Generic Avro (incl. RowKind): " + serializedLength(rec, serializer));
 
         System.out.println("POJO: " + serializedLength(new IssuerPOJO("1", "Issuer 1", "1"), TypeInformation.of(IssuerPOJO.class)));
 
@@ -76,10 +99,13 @@ public class SerializationTest {
         ExecutionConfig config = new ExecutionConfig();
         config.disableGenericTypes();
 
-        DataOutputSerializer out = new DataOutputSerializer(100);
         TypeSerializer<T> serializer = type.createSerializer(config);
-        serializer.serialize(t, out);
+        return serializedLength(t, serializer);
+    }
 
+    private<T> int serializedLength(T t, TypeSerializer<T> serializer) throws Exception {
+        DataOutputSerializer out = new DataOutputSerializer(100);
+        serializer.serialize(t, out);
         return out.length();
     }
 

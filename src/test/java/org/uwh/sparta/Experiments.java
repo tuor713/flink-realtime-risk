@@ -10,6 +10,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.co.KeyedBroadcastProcessFunction;
+import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.types.Either;
 import org.apache.flink.util.Collector;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,12 @@ import org.uwh.*;
 import org.uwh.flink.data.generic.Field;
 import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.RecordType;
+import org.uwh.flink.data.generic.Stream;
+
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.uwh.flink.data.generic.Expressions.$;
 
 public class Experiments {
     private static final Field<String> F_ACCOUNT_MNEMONIC = new Field<>("account", "mnemonic", Types.STRING);
@@ -27,6 +34,62 @@ public class Experiments {
 
     private static final Field<Double> F_RISK_ISSUER_JTD = new Field<>("issuer-risk","jtd", Double.class, Types.DOUBLE);
     private static final Field<String> F_ISSUER_NAME = new Field<>("issuer", "name", String.class, Types.STRING);
+
+    private static AtomicInteger count = new AtomicInteger(0);
+
+
+    @Test
+    public void testRiskJoin() throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
+        env.setParallelism(4);
+        env.getConfig().disableGenericTypes();
+
+        int numPos = 1000;
+        DataStream<Issuer> issuers = Generators.issuers(env, 1000, 100);
+        DataStream<IssuerRiskBatch> risk = Generators.oneTimeBatchRisk(env, numPos, 1000);
+        DataStream<RiskPosition> positions = Generators.positions(env, numPos, 100);
+
+        Stream issuerStream = Stream.fromDataStream(issuers,
+                $(issuer -> issuer.getSMCI(), Fields.F_ISSUER_ID),
+                $(issuer -> issuer.getName(), Fields.F_ISSUER_NAME));
+        Stream riskStream = Stream.fromDataStream(risk,
+                $(r -> r.getUIDType().toString(), Fields.F_POS_UID_TYPE),
+                $(r -> r.getUID(), Fields.F_POS_UID),
+                $(r -> r.getRisk(), Fields.F_RISK_ISSUER_RISKS));
+        Stream posStream = Stream.fromDataStream(positions,
+                $(pos -> pos.getUIDType().toString(), Fields.F_POS_UID_TYPE),
+                $(pos -> pos.getUID(), Fields.F_POS_UID),
+                $(pos -> pos.getFirmAccountMnemonic(), Fields.F_ACCOUNT_MNEMONIC));
+
+        RiskJoin join = new RiskJoin(riskStream.getRecordType(), posStream.getRecordType(), issuerStream.getRecordType());
+
+        DataStream<Record> joined = riskStream
+                .getDataStream()
+                .map(rec -> Either.Left(rec), new EitherTypeInfo<>(riskStream.getRecordType(), posStream.getRecordType()))
+                .union(posStream.getDataStream().map(rec -> Either.Right(rec), new EitherTypeInfo<>(riskStream.getRecordType(), posStream.getRecordType())))
+                .keyBy(t -> {
+                    Record rec = t.isLeft() ? t.left() : t.right();
+                    return rec.get(Fields.F_POS_UID_TYPE)+":"+rec.get(Fields.F_POS_UID);
+                })
+                .connect(issuerStream.getDataStream().broadcast(join.getMapStateDescriptor()))
+                .process(join);
+
+        joined.addSink(new SinkFunction<>() {
+            @Override
+            public void invoke(Record value) throws Exception {
+                count.incrementAndGet();
+            }
+        });
+
+        env.execute();
+
+        // Expected
+        // - 0..199 => bond => 200
+        // - 200..999 => deriv
+        //   - 200 index * 125 => 25000
+        //   - 600 non-index => 600
+        assertEquals(25800, count.get());
+    }
 
     @Test
     public void testBroadcastJoin() throws Exception {

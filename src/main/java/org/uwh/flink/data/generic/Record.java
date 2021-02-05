@@ -61,6 +61,12 @@ public class Record {
         return this;
     }
 
+    public void copyInto(Record rec) {
+        for (Field f : rec.getType().getFields()) {
+            set(f, rec.get(f));
+        }
+    }
+
     public RowKind getKind() {
         return data.getRowKind();
     }

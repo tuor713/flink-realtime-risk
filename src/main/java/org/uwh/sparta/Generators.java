@@ -81,16 +81,7 @@ public class Generators {
         return type == UIDType.UITID && r % 4 == 0;
     }
 
-    /*
-    Number of results:
-    - 1/5 UIPID => 100,000
-    - 4/5 UITID
-        - 1/4 index => 12,500,000
-        - 3/4 non-index => 300,000
-     => Total: 12.9 million
-     */
-    private static IssuerRiskBatch randomBatchRisk(Random r, int posLimit, int issuerLimit) {
-        int id = r.nextInt(posLimit);
+    private static IssuerRiskBatch randomBatchRisk(Random r, int id, int posLimit, int issuerLimit) {
         Tuple2<UIDType, String> uid = generateUID(id, posLimit);
 
         List<IssuerRiskLine> risks;
@@ -106,6 +97,19 @@ public class Generators {
         }
 
         return new IssuerRiskBatch(uid.f0, uid.f1, COB, System.currentTimeMillis(), risks);
+    }
+
+    /*
+    Number of results:
+    - 1/5 UIPID => 100,000
+    - 4/5 UITID
+        - 1/4 index => 12,500,000
+        - 3/4 non-index => 300,000
+     => Total: 12.9 million
+     */
+    private static IssuerRiskBatch randomBatchRisk(Random r, int posLimit, int issuerLimit) {
+        int id = r.nextInt(posLimit);
+        return randomBatchRisk(r, id, posLimit, issuerLimit);
     }
 
     public static List<IssuerRisk> issuerRiskList(int num, int posLimit, int issuerLimit) {
@@ -152,6 +156,12 @@ public class Generators {
             @Override
             public void cancel() {}
         }).name("Issuer Risk");
+    }
+
+    public static DataStream<IssuerRiskBatch> oneTimeBatchRisk(StreamExecutionEnvironment env, int posLimit, int issuerLimit) {
+        Random r = new Random();
+        List<IssuerRiskBatch> risks = IntStream.range(0, posLimit).mapToObj(id -> randomBatchRisk(r, id, posLimit, issuerLimit)).collect(Collectors.toList());
+        return env.fromCollection(risks);
     }
 
     public static DataStream<IssuerRiskBatch> batchRisk(StreamExecutionEnvironment env, int posLimit, int issuerLimit) {

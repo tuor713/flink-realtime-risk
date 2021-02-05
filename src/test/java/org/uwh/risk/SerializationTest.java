@@ -1,4 +1,4 @@
-package org.uwh.sparta;
+package org.uwh.risk;
 
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;

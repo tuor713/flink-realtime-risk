@@ -1,4 +1,4 @@
-package org.uwh.sparta;
+package org.uwh.risk;
 
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.typeutils.ListTypeInfo;

@@ -1,4 +1,4 @@
-package org.uwh.sparta;
+package org.uwh.risk;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -20,7 +20,7 @@ import java.util.List;
 
 import static org.uwh.flink.data.generic.Expressions.$;
 import static org.uwh.flink.data.generic.Expressions.as;
-import static org.uwh.sparta.Fields.*;
+import static org.uwh.risk.Fields.*;
 
 public class MainJob {
 

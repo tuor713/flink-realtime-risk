@@ -1,4 +1,4 @@
-package org.uwh.sparta;
+package org.uwh.risk;
 
 import org.apache.flink.api.common.state.*;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -17,7 +17,7 @@ import org.uwh.flink.data.generic.RecordType;
 
 import java.util.*;
 
-import static org.uwh.sparta.Fields.*;
+import static org.uwh.risk.Fields.*;
 
 /*
 Heart piece of the risk streaming join

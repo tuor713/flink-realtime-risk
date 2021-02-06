@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.uwh.UIDType;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -66,7 +67,7 @@ public class RecordTest {
         List<Field> fields = List.of(F_RISK_ISSUER_JTD, F_POS_UID, F_AUDIT_DATE_TIME, F_POS_UID_TYPE);
 
         for (Field field : fields) {
-            RecordType type = new RecordType(config, field);
+            RecordType type = new RecordType(config, List.of(field), Set.of(field));
             Record rec = new Record(type);
             assertEquals(null, rec.get(field), "Uninitialized record of field " + field + " is not null");
 

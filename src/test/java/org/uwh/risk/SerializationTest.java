@@ -21,6 +21,7 @@ import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.RecordType;
 
 import java.util.List;
+import java.util.Set;
 
 public class SerializationTest {
     private static final Field<String> F_ISSUER_ID = new Field<>("issuer","id", String.class, Types.STRING);
@@ -41,6 +42,9 @@ public class SerializationTest {
         config.disableGenericTypes();
 
         // Avro serialization is about 70% size of RowData
+        // - Note that this is still not as efficient as the default Avro binary serialization.
+        //   For example for ints Avro uses variable length encoding whereas in Flink the encoder chooses a fixed
+        //   4 byte format.
         // POJO is a little bit smaller still
 
         System.out.println("=== Issuer ===");
@@ -65,7 +69,7 @@ public class SerializationTest {
 
         System.out.println("POJO: " + serializedLength(new IssuerPOJO("1", "Issuer 1", "1"), TypeInformation.of(IssuerPOJO.class)));
 
-        RecordType type = new RecordType(config, F_ISSUER_ID, F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_ID);
+        RecordType type = new RecordType(config, List.of(F_ISSUER_ID, F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_ID), Set.of(F_ISSUER_ULTIMATE_PARENT_ID));
         System.out.println("RowData: " + serializedLength(new Record(type).with(F_ISSUER_ID, "1").with(F_ISSUER_NAME, "Issuer 1").with(F_ISSUER_ULTIMATE_PARENT_ID, "1"), type));
 
         System.out.println("=== Issuer Risk ===");

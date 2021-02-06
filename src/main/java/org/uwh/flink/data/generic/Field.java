@@ -21,7 +21,7 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
         this.name = name;
         this.clazz = clazz;
         this.type = type;
-        this.fullName = namespace + "_" + name;
+        this.fullName = (namespace + "_" + name).replaceAll("[-.]","_");
         this.hashCode = Objects.hash(namespace, name);
     }
 
@@ -41,7 +41,7 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
         return name;
     }
 
-    public String getFullFieldName() {
+    public String getFullName() {
         return fullName;
     }
 

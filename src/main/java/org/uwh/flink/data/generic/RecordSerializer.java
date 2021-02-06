@@ -1,5 +1,6 @@
 package org.uwh.flink.data.generic;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeutils.NestedSerializersSnapshotDelegate;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
@@ -9,28 +10,24 @@ import org.apache.flink.api.java.typeutils.runtime.DataInputViewStream;
 import org.apache.flink.api.java.typeutils.runtime.DataOutputViewStream;
 import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
-import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.runtime.typeutils.RowDataTypeInfo;
-import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.formats.avro.typeutils.AvroSerializer;
 import org.apache.flink.util.InstantiationUtil;
 
 import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 
 public class RecordSerializer extends TypeSerializer<Record> {
     private final RecordType type;
-    private final TypeSerializer<RowData> delegate;
+    private final TypeSerializer<GenericData.Record> delegate;
 
     public RecordSerializer(ExecutionConfig config, RecordType type) {
         this.type = type;
-
-        delegate = new RowDataTypeInfo(
-                type.getFields().stream().map(f -> f.getLogicalType(config)).collect(Collectors.toList()).toArray(new LogicalType[0])
-        ).createSerializer(config);
+        delegate = new AvroSerializer<>(GenericData.Record.class, type.getSchema());
     }
 
-    private RecordSerializer(RecordType type, TypeSerializer<RowData> delegate) {
+    private RecordSerializer(RecordType type, TypeSerializer<GenericData.Record> delegate) {
         this.type = type;
         this.delegate = delegate;
     }
@@ -67,12 +64,12 @@ public class RecordSerializer extends TypeSerializer<Record> {
 
     @Override
     public void serialize(Record record, DataOutputView dataOutputView) throws IOException {
-        delegate.serialize(record.getRow(), dataOutputView);
+        delegate.serialize(record.getGenericRecord(), dataOutputView);
     }
 
     @Override
     public Record deserialize(DataInputView dataInputView) throws IOException {
-        RowData row = delegate.deserialize(dataInputView);
+        GenericData.Record row = delegate.deserialize(dataInputView);
         return new Record(row, type);
     }
 

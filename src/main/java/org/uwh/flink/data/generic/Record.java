@@ -1,37 +1,33 @@
 package org.uwh.flink.data.generic;
 
-import org.apache.flink.table.data.GenericRowData;
-import org.apache.flink.table.data.RowData;
+import org.apache.avro.generic.GenericData;
 import org.apache.flink.types.RowKind;
 
 import java.util.Objects;
 
 public class Record {
-    private final RowData data;
+    private final GenericData.Record data;
     private final RecordType type;
 
-    public Record(RowData data, RecordType type) {
-        this.data = data;
+    public Record(GenericData.Record record, RecordType type) {
+        this.data = new GenericData.Record(record, false);
         this.type = type;
     }
 
     public Record(RecordType type) {
-        this.data = new GenericRowData(type.getFields().size());
-        this.type = type;
+        this(RowKind.INSERT, type);
     }
 
     public Record(RowKind kind, RecordType type) {
-        this.data = new GenericRowData(kind, type.getFields().size());
+        this.data = new GenericData.Record(type.getSchema());
         this.type = type;
+        set(RecordType.F_ROW_KIND, kind);
     }
 
     public Record(Record rec) {
-        this.data = new GenericRowData(rec.getKind(), rec.data.getArity());
+        this.data = new GenericData.Record(rec.data, false);
         this.type = rec.type;
-
-        for (Field f : type.getFields()) {
-            this.set(f, rec.get(f));
-        }
+        set(RecordType.F_ROW_KIND, rec.getKind());
     }
 
     public Record(RowKind kind, Record rec) {
@@ -40,8 +36,9 @@ public class Record {
 
     // Copy constructor but potentially narrower type
     public Record(RowKind kind, RecordType type, Record rec) {
-        this.data = new GenericRowData(kind, type.getFields().size());
         this.type = type;
+        this.data = new GenericData.Record(type.getSchema());
+        set(RecordType.F_ROW_KIND, kind);
 
         for (Field f : type.getFields()) {
             this.set(f, rec.get(f));
@@ -53,7 +50,7 @@ public class Record {
     }
 
     public<T> void set(Field<T> field, T value) {
-        type.set((GenericRowData) data, field, value);
+        type.set(data, field, value);
     }
 
     public<T> Record with(Field<T> field, T value) {
@@ -68,10 +65,10 @@ public class Record {
     }
 
     public RowKind getKind() {
-        return data.getRowKind();
+        return get(RecordType.F_ROW_KIND);
     }
 
-    public RowData getRow() {
+    public GenericData.Record getGenericRecord() {
         return data;
     }
 
@@ -82,7 +79,7 @@ public class Record {
     public String toString() {
         StringBuilder builder = new StringBuilder();
         builder.append("Record[")
-                .append(data.getRowKind().shortString())
+                .append(getKind().shortString())
                 .append("]{");
         boolean first = true;
         for (Field f : type.getFields()) {

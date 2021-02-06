@@ -1,126 +1,252 @@
 package org.uwh.flink.data.generic;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.reflect.Nullable;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RawValueData;
-import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.binary.BinaryRawValueData;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RawType;
+import org.apache.flink.types.RowKind;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class RecordType extends TypeInformation<Record> {
     // TODO Add distinction between mandatory and optional fields
     @SuppressWarnings("rawtypes")
     private final TreeSet<Field> fields = new TreeSet<>();
     private final Map<Field,Integer> indices = new HashMap<>();
+    private final Set<Field> nullable = new HashSet<>();
     private final ExecutionConfig config;
     private final FieldGetter[] getters;
     private final FieldSetter[] setters;
+    private final SerializableAvroSchema schema;
+    public static final Field<RowKind> F_ROW_KIND = new Field("_record","row-kind",TypeInformation.of(RowKind.class));
+
+    // copied from Flink internal
+    final static class SerializableAvroSchema implements Serializable {
+        private static final long serialVersionUID = 1L;
+        @Nullable
+        private transient Schema schema;
+
+        SerializableAvroSchema() {
+        }
+
+        SerializableAvroSchema(Schema schema) {
+            this.schema = schema;
+        }
+
+        Schema getAvroSchema() {
+            return this.schema;
+        }
+
+        private void writeObject(ObjectOutputStream oos) throws IOException {
+            if (this.schema == null) {
+                oos.writeBoolean(false);
+            } else {
+                oos.writeBoolean(true);
+                oos.writeUTF(this.schema.toString(false));
+            }
+
+        }
+
+        private void readObject(ObjectInputStream ois) throws ClassNotFoundException, IOException {
+            if (ois.readBoolean()) {
+                String schema = ois.readUTF();
+                this.schema = (new Schema.Parser()).parse(schema);
+            } else {
+                this.schema = null;
+            }
+
+        }
+    }
 
     @FunctionalInterface
     public interface FieldGetter<T> extends Serializable {
-        T get(RowData data);
+        T get(GenericData.Record data);
     }
 
     public interface FieldSetter<T> extends Serializable {
-        void set(GenericRowData data, T value);
+        void set(GenericData.Record data, T value);
     }
+
 
     @SuppressWarnings("rawtypes")
     public RecordType(ExecutionConfig config, Field... fields) {
         this(config, Arrays.asList(fields));
     }
 
-    @SuppressWarnings("rawtypes")
     public RecordType(ExecutionConfig config, Collection<Field> fields) {
+        this(config, fields, Collections.emptySet());
+    }
+
+    @SuppressWarnings("rawtypes")
+    public RecordType(ExecutionConfig config, Collection<Field> fields, Set<Field> nullable) {
         this.config = config;
+        this.fields.add(F_ROW_KIND);
         this.fields.addAll(fields);
+        this.nullable.addAll(nullable);
         int idx = 0;
 
-        getters = new FieldGetter[fields.size()];
-        setters = new FieldSetter[fields.size()];
+        this.schema = new SerializableAvroSchema(buildSchema());
+
+        getters = new FieldGetter[this.fields.size()];
+        setters = new FieldSetter[this.fields.size()];
 
         for (Field f : this.fields) {
             indices.put(f, idx);
 
-            getters[idx] = createGetter(f, idx);
-            setters[idx] = createSetter(f, idx);
+            getters[idx] = createGetter(f, this.nullable.contains(f), idx);
+            setters[idx] = createSetter(f, this.nullable.contains(f), idx);
 
             idx++;
         }
     }
 
-    private FieldGetter createGetter(Field f, int index) {
+
+
+    private Schema buildSchema() {
+        List<Schema.Field> fs = fields.stream().map(this::buildField).collect(Collectors.toList());
+        return Schema.createRecord("schema_"+UUID.randomUUID().toString().replaceAll("-",""), "", "_record", false, fs);
+    }
+
+    private Schema.Field buildField(Field f) {
+        LogicalType type = f.getLogicalType(config);
+        Schema schema;
+        switch (type.getTypeRoot()) {
+            case DOUBLE:
+                schema = Schema.create(Schema.Type.DOUBLE);
+                break;
+            case BIGINT:
+                schema = Schema.create(Schema.Type.LONG);
+                break;
+            case VARCHAR:
+                schema = Schema.create(Schema.Type.STRING);
+                schema.addProp("avro.java.string", "String");
+                break;
+            case TINYINT:
+                schema = Schema.create(Schema.Type.INT);
+                break;
+            case RAW:
+                schema = Schema.create(Schema.Type.BYTES);
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported field type for "+f);
+        }
+
+        if (nullable.contains(f)) {
+            schema = Schema.createUnion(Schema.create(Schema.Type.NULL), schema);
+        }
+
+        return new Schema.Field(f.getFullName(), schema);
+    }
+
+    public Schema getSchema() {
+        return schema.getAvroSchema();
+    }
+
+    private FieldGetter createGetter(Field f, boolean nullable, int index) {
         LogicalType type = f.getLogicalType(config);
         switch (type.getTypeRoot()) {
             case DOUBLE:
-                return data -> data.isNullAt(index) ? null : data.getDouble(index);
+                return data -> data.get(index);
             case BIGINT:
-                return data -> data.isNullAt(index) ? null : data.getLong(index);
+                return data -> data.get(index);
             case VARCHAR:
-                return data -> {
-                    if (data.isNullAt(index)) return null;
-                    StringData res = data.getString(index);
-                    return (res != null) ? res.toString() : null;
-                };
+                return data -> data.get(index);
             case TINYINT:
                 if (f.getTypeClass().isEnum()) {
                     Class<Enum> clazz = f.getTypeClass();
                     Enum[] values = clazz.getEnumConstants();
-                    return data -> data.isNullAt(index) ? null : values[data.getByte(index)];
+                    if (nullable) {
+                        return data -> {
+                            Integer val = (Integer) data.get(index);
+                            return val != null ? values[val] : null;
+                        };
+                    } else {
+                        return data -> values[(int) data.get(index)];
+                    }
                 } else {
-                    return data -> data.isNullAt(index) ? null : data.getByte(index);
+                    return data -> data.get(index);
                 }
             case RAW:
                 TypeSerializer serializer = ((RawType) type).getTypeSerializer();
-                return data -> {
-                    if (data.isNullAt(index)) return null;
-                    RawValueData res = data.getRawValue(index);
-                    return (res != null) ? res.toObject(serializer) : null;
+                if (nullable) {
+                    return data -> {
+                        ByteBuffer bytes = (ByteBuffer) data.get(index);
+                        if (bytes != null) {
+                            return RawValueData.fromBytes(bytes.array()).toObject(serializer);
+                        } else {
+                            return null;
+                        }
+                    };
+                } else {
+                    return data -> RawValueData.fromBytes(((ByteBuffer) data.get(index)).array()).toObject(serializer);
+                }
+            default:
+                throw new IllegalStateException("No support for field type for "+f);
+        }
+    }
+
+    private FieldSetter createSetter(Field f, boolean nullable, int index) {
+        LogicalType type = f.getLogicalType(config);
+        switch (type.getTypeRoot()) {
+            case DOUBLE:
+            case BIGINT:
+                return (data, value) -> data.put(index, value);
+            case TINYINT:
+                if (f.getTypeClass().isEnum()) {
+                    EnumMap mapping = new EnumMap(f.getTypeClass());
+                    int i = 0;
+                    for (Enum val : (Enum[]) f.getTypeClass().getEnumConstants()) {
+                        mapping.put(val, i++);
+                    }
+
+                    if (nullable) {
+                        return (data, value) -> {
+                            if (value == null) {
+                                data.put(index, null);
+                            } else {
+                                data.put(index, (int) mapping.get(value));
+                            }
+                        };
+                    } else {
+                        return (data, value) -> data.put(index, (int) mapping.get(value));
+                    }
+                } else {
+                    return (data, value) -> data.put(index, value);
+                }
+            case VARCHAR:
+                return (data, value) -> data.put(index, value);
+            case RAW:
+                TypeSerializer serializer = ((RawType) type).getTypeSerializer();
+                return (data, value) -> {
+                    if (value == null) {
+                        data.put(index, null);
+                    } else {
+                        byte[] bytes = BinaryRawValueData.fromObject(value).toBytes(serializer);
+                        data.put(index, ByteBuffer.wrap(bytes));
+                    }
                 };
             default:
                 throw new IllegalStateException("No support for field type for "+f);
         }
     }
 
-    private FieldSetter createSetter(Field f, int index) {
-        LogicalType type = f.getLogicalType(config);
-        switch (type.getTypeRoot()) {
-            case DOUBLE:
-            case BIGINT:
-                return (data, value) -> data.setField(index, value);
-            case TINYINT:
-                if (f.getTypeClass().isEnum()) {
-                    EnumMap mapping = new EnumMap(f.getTypeClass());
-                    byte i = 0;
-                    for (Enum val : (Enum[]) f.getTypeClass().getEnumConstants()) {
-                        mapping.put(val, i++);
-                    }
-
-                    return (data, value) -> data.setField(index, mapping.get(value));
-                } else {
-                    return (data, value) -> data.setField(index, value);
-                }
-            case VARCHAR:
-                return (data, value) -> data.setField(index, StringData.fromString((String) value));
-            case RAW:
-                return (data, value) -> data.setField(index, BinaryRawValueData.fromObject(value));
-            default:
-                throw new IllegalStateException("No support for field type for "+f);
-        }
-    }
-
-    public<T> T get(RowData data, Field<T> field) {
+    public<T> T get(GenericData.Record data, Field<T> field) {
         return (T) getters[indexOf(field)].get(data);
     }
 
-    public<T> void set(GenericRowData data, Field<T> field, T value) {
+    public<T> void set(GenericData.Record data, Field<T> field, T value) {
         setters[indexOf(field)].set(data, value);
     }
 

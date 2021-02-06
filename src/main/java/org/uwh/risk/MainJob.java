@@ -13,8 +13,7 @@ import org.apache.flink.types.Either;
 import org.uwh.*;
 import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.Stream;
-import org.uwh.flink.util.DelayedParallelSource;
-import org.uwh.flink.util.DelayedSource;
+import org.uwh.flink.util.DelayedSourceFunction;
 
 import java.util.List;
 
@@ -38,13 +37,16 @@ public class MainJob {
          */
         int delayMs = 10_000;
         List<RiskPosition> posList = Generators.positionList(numPositions, Generators.NO_USED_ACCOUNT);
-        DataStream<RiskPosition> posStream = env.addSource(new DelayedSource<>(
+        DataStream<RiskPosition> posStream = DelayedSourceFunction.delay(
+                env,
                 new FromElementsFunction<>(TypeInformation.of(RiskPosition.class).createSerializer(env.getConfig()), posList),
-                TypeInformation.of(RiskPosition.class), delayMs)).name("Risk Position");
-        DataStream<IssuerRiskBatch> batchStream = env.addSource(new DelayedParallelSource<>(
+                TypeInformation.of(RiskPosition.class),
+                delayMs).name("Risk Position");
+        DataStream<IssuerRiskBatch> batchStream = DelayedSourceFunction.delay(
+                env,
                 Generators.batchRisk(numPositions, Generators.NO_USED_ISSUER),
                 TypeInformation.of(IssuerRiskBatch.class),
-                delayMs)).name("Issuer Risk Batch");
+                delayMs).name("Issuer Risk Batch");
 
         DataStream<Issuer> issuerStream = Generators.issuers(env, Generators.NO_ISSUER, Generators.NO_ULTIMATE);
         DataStream<FirmAccount> accountStream = Generators.accounts(env, Generators.NO_ACCOUNT);

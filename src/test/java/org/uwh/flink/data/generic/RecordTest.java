@@ -93,6 +93,8 @@ public class RecordTest {
         RecordType type = new RecordType(config, F_POS_UID_TYPE, F_POS_UID, F_RISK_ISSUER_JTD);
         Record rec = new Record(type).with(F_POS_UID_TYPE, UIDType.UITID).with(F_POS_UID, "123").with(F_RISK_ISSUER_JTD, 1000.0);
 
+        assertEquals(3, type.getFields().size());
+
         assertEquals(UIDType.UITID, rec.get(F_POS_UID_TYPE));
         assertEquals("123", rec.get(F_POS_UID));
         assertEquals(1000.0, rec.get(F_RISK_ISSUER_JTD), 0.1);

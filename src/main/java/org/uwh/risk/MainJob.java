@@ -40,11 +40,11 @@ public class MainJob {
         List<RiskPosition> posList = Generators.positionList(numPositions, Generators.NO_USED_ACCOUNT);
         DataStream<RiskPosition> posStream = env.addSource(new DelayedSource<>(
                 new FromElementsFunction<>(TypeInformation.of(RiskPosition.class).createSerializer(env.getConfig()), posList),
-                TypeInformation.of(RiskPosition.class), delayMs));
+                TypeInformation.of(RiskPosition.class), delayMs)).name("Risk Position");
         DataStream<IssuerRiskBatch> batchStream = env.addSource(new DelayedParallelSource<>(
                 Generators.batchRisk(numPositions, Generators.NO_USED_ISSUER),
                 TypeInformation.of(IssuerRiskBatch.class),
-                delayMs));
+                delayMs)).name("Issuer Risk Batch");
 
         DataStream<Issuer> issuerStream = Generators.issuers(env, Generators.NO_ISSUER, Generators.NO_ULTIMATE);
         DataStream<FirmAccount> accountStream = Generators.accounts(env, Generators.NO_ACCOUNT);

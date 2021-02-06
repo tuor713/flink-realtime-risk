@@ -92,16 +92,19 @@ public class RecordType extends TypeInformation<Record> {
     @SuppressWarnings("rawtypes")
     public RecordType(ExecutionConfig config, Collection<Field> fields, Set<Field> nullable) {
         this.config = config;
-        this.fields.add(F_ROW_KIND);
         this.fields.addAll(fields);
         this.nullable.addAll(nullable);
-        int idx = 0;
 
         this.schema = new SerializableAvroSchema(buildSchema());
 
-        getters = new FieldGetter[this.fields.size()];
-        setters = new FieldSetter[this.fields.size()];
+        getters = new FieldGetter[this.fields.size()+1];
+        setters = new FieldSetter[this.fields.size()+1];
 
+        indices.put(F_ROW_KIND, 0);
+        getters[0] = createGetter(F_ROW_KIND, false, 0);
+        setters[0] = createSetter(F_ROW_KIND, false, 0);
+
+        int idx = 1;
         for (Field f : this.fields) {
             indices.put(f, idx);
 
@@ -115,7 +118,9 @@ public class RecordType extends TypeInformation<Record> {
 
 
     private Schema buildSchema() {
-        List<Schema.Field> fs = fields.stream().map(this::buildField).collect(Collectors.toList());
+        List<Schema.Field> fs = new ArrayList<>();
+        fs.add(buildField(F_ROW_KIND));
+        fs.addAll(fields.stream().map(this::buildField).collect(Collectors.toList()));
         return Schema.createRecord("schema_"+UUID.randomUUID().toString().replaceAll("-",""), "", "_record", false, fs);
     }
 

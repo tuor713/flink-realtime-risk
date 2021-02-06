@@ -6,6 +6,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
@@ -50,7 +51,7 @@ public class Stream implements Serializable {
                     }
 
                     return rec;
-                }, type),
+                }, type).name("Transform to Stream"),
                 type,
                 ChangeLogMode.APPEND
         );
@@ -122,6 +123,10 @@ public class Stream implements Serializable {
         return new Stream(resStream, type, ChangeLogMode.CHANGE_LOG);
     }
 
+    private String createSelectName(Expression[] expressions) {
+        return "SELECT " + String.join(", ", Arrays.stream(expressions).map(Object::toString).collect(Collectors.toList()));
+    }
+
     public Stream select(Expression... expressions) {
         RecordType resultType = new RecordType(type.getConfig(), Arrays.stream(expressions).flatMap(
                 exp -> {
@@ -148,18 +153,18 @@ public class Stream implements Serializable {
                     }
 
                     return res;
-                }, resultType),
+                }, resultType).name(createSelectName(expressions)),
                 resultType,
                 changeLogMode
         );
     }
 
     public<T> Stream joinManyToOne(Stream right, Field key, Field<T> leftPrimaryKey) {
-        return joinManyToOne(right, key, rec -> rec.get(leftPrimaryKey), leftPrimaryKey.getType());
+        return joinManyToOne(right, key, rec -> rec.get(leftPrimaryKey), leftPrimaryKey.getType()).name("JOIN[N-1] ON "+key);
     }
 
     public<T> Stream joinManyToOne(Stream right, Field key, KeySelector<Record, T> leftPrimaryKey, TypeInformation<T> leftPrimaryKeyType) {
-        return joinManyToOne(right, rec -> rec.get(key), key.getType(), leftPrimaryKey, leftPrimaryKeyType);
+        return joinManyToOne(right, rec -> rec.get(key), key.getType(), leftPrimaryKey, leftPrimaryKeyType).name("JOIN[N-1] ON "+key);
     }
 
     public<U,V> Stream joinManyToOne(Stream right, KeySelector<Record, U> key, TypeInformation<U> keyType, KeySelector<Record, V> leftPrimaryKey, TypeInformation<V> leftPrimaryKeyType) {
@@ -172,7 +177,7 @@ public class Stream implements Serializable {
                                     leftPrimaryKeyType,
                                     leftPrimaryKey,
                                     right.type
-                ), resType).name("Join N-1");
+                ), resType).name("JOIN[N-1]");
 
         return new Stream(resStream, resType, changeLogMode);
     }
@@ -213,13 +218,13 @@ public class Stream implements Serializable {
                 key.getType(),
                 (curLeft, curRight, newLeft, newRight) -> defaultJoin(curLeft, curRight, newLeft, newRight, resType),
                 resType,
-                changeLogMode);
+                changeLogMode).name("JOIN[1-1] ON " + key);
     }
 
     public<U> Stream joinOneToOne(Stream right, KeySelector<Record, U> key, TypeInformation<U> keyType, DeltaJoinFunction<Record, Record, Record> join, RecordType resType, ChangeLogMode mode) {
         DataStream<Record> resStream = stream.keyBy(key, keyType)
                 .connect(right.stream.keyBy(key, keyType))
-                .process(new OneToOneJoin<>(join, type, right.type), resType).name("Join 1-1");
+                .process(new OneToOneJoin<>(join, type, right.type), resType).name("JOIN[1-1]");
 
         return new Stream(resStream, resType, mode);
     }
@@ -299,9 +304,21 @@ public class Stream implements Serializable {
 
                         return res;
                     }
-                }, resType).name("Aggregate");
+                }, resType).name("AGGREGATE "
+                        + String.join(", ", aggregations.stream().map(f -> f.toString()).collect(Collectors.toList()))
+                        + " ON " + String.join(", ", dimensions.stream().map(f -> f.toString()).collect(Collectors.toList())));
 
         return new Stream(resStream, resType, ChangeLogMode.CHANGE_LOG);
+    }
+
+    public Stream name(String name) {
+        if (!(stream instanceof SingleOutputStreamOperator)) {
+            throw new IllegalStateException("Cannot set name on " + stream);
+        }
+
+        ((SingleOutputStreamOperator<?>) stream).name(name);
+
+        return this;
     }
 
     public void print(String label) {

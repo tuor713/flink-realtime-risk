@@ -102,7 +102,7 @@ public class MainJob {
                     return rec.get(Fields.F_POS_UID_TYPE)+":"+rec.get(Fields.F_POS_UID);
                 })
                 .connect(issuersWithParent.getDataStream().broadcast(join.getMapStateDescriptor()))
-                .process(join);
+                .process(join).name("Risk - Position - Issuer Join");
 
         Stream finalStream = new Stream(finalDataStream, join.getProducedType(), Stream.ChangeLogMode.CHANGE_LOG);
 

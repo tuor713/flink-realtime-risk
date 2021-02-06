@@ -8,7 +8,7 @@ public class Expressions {
     }
 
     // Special case placeholder
-    public static final Expression<Object> STAR = new Expression<Object>() {
+    public static final Expression<Object> STAR = new Expression<>() {
         @Override
         public Field<Object> getResultField() {
             return null;
@@ -20,6 +20,11 @@ public class Expressions {
         }
 
         public boolean isStar() { return true; }
+
+        @Override
+        public String toString() {
+            return "*";
+        }
     };
 
     public static<T,F> FieldConverter<T,F> $(MapFunction<T,F> selector, Field<F> field) {
@@ -47,6 +52,11 @@ public class Expressions {
             public T map(Record rec) throws Exception {
                 return mapper.map(rec);
             }
+
+            @Override
+            public String toString() {
+                return "<exp> AS "+field.toString();
+            }
         };
     }
 
@@ -61,6 +71,12 @@ public class Expressions {
             public T map(Record record) throws Exception {
                 return record.get(oldField);
             }
+
+            @Override
+            public String toString() {
+                return oldField.toString() + " AS " + newField.toString();
+            }
+
         };
     }
 }

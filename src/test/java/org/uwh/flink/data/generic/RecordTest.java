@@ -4,6 +4,8 @@ import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.core.memory.DataInputDeserializer;
 import org.apache.flink.core.memory.DataOutputSerializer;
 import org.apache.flink.types.RowKind;
@@ -86,6 +88,22 @@ public class RecordTest {
         assertEquals(UIDType.UIPID, rec.get(F_POS_UID_TYPE));
 
         assertTrue(serializedLength(rec) <= 20, "Message length: "+serializedLength(rec));
+    }
+
+    @Test
+    public void testTupleWithNull() throws Exception {
+        RecordType atype = new RecordType(config, F_POS_UID_TYPE);
+        RecordType btype = new RecordType(config, F_POS_UID);
+        TupleTypeInfo<Tuple2<Record,Record>> tinfo = new TupleTypeInfo<>(atype, btype);
+        TypeSerializer<Tuple2<Record, Record>> serializer = tinfo.createSerializer(config);
+        Tuple2<Record,Record> tup = Tuple2.of(new Record(atype).with(F_POS_UID_TYPE, UIDType.UITID), null);
+        DataOutputSerializer out = new DataOutputSerializer(100);
+        serializer.serialize(tup, out);
+
+        DataInputDeserializer in = new DataInputDeserializer(out.getCopyOfBuffer());
+        Tuple2<Record,Record> tup2 = serializer.deserialize(in);
+        assertEquals(tup, tup2);
+
     }
 
     @Test

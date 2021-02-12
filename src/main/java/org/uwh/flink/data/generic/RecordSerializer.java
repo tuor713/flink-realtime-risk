@@ -64,11 +64,18 @@ public class RecordSerializer extends TypeSerializer<Record> {
 
     @Override
     public void serialize(Record record, DataOutputView dataOutputView) throws IOException {
-        delegate.serialize(record.getGenericRecord(), dataOutputView);
+        if (record == null) {
+            dataOutputView.writeBoolean(true);
+        } else {
+            dataOutputView.writeBoolean(false);
+            delegate.serialize(record.getGenericRecord(), dataOutputView);
+        }
     }
 
     @Override
     public Record deserialize(DataInputView dataInputView) throws IOException {
+        boolean isNull = dataInputView.readBoolean();
+        if (isNull) return null;
         GenericData.Record row = delegate.deserialize(dataInputView);
         return new Record(row, type);
     }

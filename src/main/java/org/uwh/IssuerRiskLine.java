@@ -14,11 +14,14 @@ import org.apache.avro.message.SchemaStore;
 
 @org.apache.avro.specific.AvroGenerated
 public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
-  private static final long serialVersionUID = 6171431194346658767L;
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"IssuerRiskLine\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"SMCI\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"CR01\",\"type\":\"double\"},{\"name\":\"JTD\",\"type\":\"double\"}]}");
+  private static final long serialVersionUID = 710693237675593759L;
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"IssuerRiskLine\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"SMCI\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"CR01\",\"type\":\"double\"},{\"name\":\"JTD\",\"type\":\"double\"},{\"name\":\"JTDRolldown\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"RolldownItem\",\"fields\":[{\"name\":\"Date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},{\"name\":\"JTD\",\"type\":\"float\"}]}}}]}");
   public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
   private static SpecificData MODEL$ = new SpecificData();
+static {
+    MODEL$.addLogicalTypeConversion(new org.apache.avro.data.TimeConversions.DateConversion());
+  }
 
   private static final BinaryMessageEncoder<IssuerRiskLine> ENCODER =
       new BinaryMessageEncoder<IssuerRiskLine>(MODEL$, SCHEMA$);
@@ -74,6 +77,7 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
    private java.lang.String SMCI;
    private double CR01;
    private double JTD;
+   private java.util.List<org.uwh.RolldownItem> JTDRolldown;
 
   /**
    * Default constructor.  Note that this does not initialize fields
@@ -87,11 +91,13 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
    * @param SMCI The new value for SMCI
    * @param CR01 The new value for CR01
    * @param JTD The new value for JTD
+   * @param JTDRolldown The new value for JTDRolldown
    */
-  public IssuerRiskLine(java.lang.String SMCI, java.lang.Double CR01, java.lang.Double JTD) {
+  public IssuerRiskLine(java.lang.String SMCI, java.lang.Double CR01, java.lang.Double JTD, java.util.List<org.uwh.RolldownItem> JTDRolldown) {
     this.SMCI = SMCI;
     this.CR01 = CR01;
     this.JTD = JTD;
+    this.JTDRolldown = JTDRolldown;
   }
 
   public org.apache.avro.specific.SpecificData getSpecificData() { return MODEL$; }
@@ -102,6 +108,7 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
     case 0: return SMCI;
     case 1: return CR01;
     case 2: return JTD;
+    case 3: return JTDRolldown;
     default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
   }
@@ -113,6 +120,7 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
     case 0: SMCI = value$ != null ? value$.toString() : null; break;
     case 1: CR01 = (java.lang.Double)value$; break;
     case 2: JTD = (java.lang.Double)value$; break;
+    case 3: JTDRolldown = (java.util.List<org.uwh.RolldownItem>)value$; break;
     default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
   }
@@ -169,6 +177,23 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
   }
 
   /**
+   * Gets the value of the 'JTDRolldown' field.
+   * @return The value of the 'JTDRolldown' field.
+   */
+  public java.util.List<org.uwh.RolldownItem> getJTDRolldown() {
+    return JTDRolldown;
+  }
+
+
+  /**
+   * Sets the value of the 'JTDRolldown' field.
+   * @param value the value to set.
+   */
+  public void setJTDRolldown(java.util.List<org.uwh.RolldownItem> value) {
+    this.JTDRolldown = value;
+  }
+
+  /**
    * Creates a new IssuerRiskLine RecordBuilder.
    * @return A new IssuerRiskLine RecordBuilder
    */
@@ -212,6 +237,7 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
     private java.lang.String SMCI;
     private double CR01;
     private double JTD;
+    private java.util.List<org.uwh.RolldownItem> JTDRolldown;
 
     /** Creates a new Builder */
     private Builder() {
@@ -236,6 +262,10 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
         this.JTD = data().deepCopy(fields()[2].schema(), other.JTD);
         fieldSetFlags()[2] = other.fieldSetFlags()[2];
       }
+      if (isValidValue(fields()[3], other.JTDRolldown)) {
+        this.JTDRolldown = data().deepCopy(fields()[3].schema(), other.JTDRolldown);
+        fieldSetFlags()[3] = other.fieldSetFlags()[3];
+      }
     }
 
     /**
@@ -255,6 +285,10 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
       if (isValidValue(fields()[2], other.JTD)) {
         this.JTD = data().deepCopy(fields()[2].schema(), other.JTD);
         fieldSetFlags()[2] = true;
+      }
+      if (isValidValue(fields()[3], other.JTDRolldown)) {
+        this.JTDRolldown = data().deepCopy(fields()[3].schema(), other.JTDRolldown);
+        fieldSetFlags()[3] = true;
       }
     }
 
@@ -376,6 +410,46 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
       return this;
     }
 
+    /**
+      * Gets the value of the 'JTDRolldown' field.
+      * @return The value.
+      */
+    public java.util.List<org.uwh.RolldownItem> getJTDRolldown() {
+      return JTDRolldown;
+    }
+
+
+    /**
+      * Sets the value of the 'JTDRolldown' field.
+      * @param value The value of 'JTDRolldown'.
+      * @return This builder.
+      */
+    public org.uwh.IssuerRiskLine.Builder setJTDRolldown(java.util.List<org.uwh.RolldownItem> value) {
+      validate(fields()[3], value);
+      this.JTDRolldown = value;
+      fieldSetFlags()[3] = true;
+      return this;
+    }
+
+    /**
+      * Checks whether the 'JTDRolldown' field has been set.
+      * @return True if the 'JTDRolldown' field has been set, false otherwise.
+      */
+    public boolean hasJTDRolldown() {
+      return fieldSetFlags()[3];
+    }
+
+
+    /**
+      * Clears the value of the 'JTDRolldown' field.
+      * @return This builder.
+      */
+    public org.uwh.IssuerRiskLine.Builder clearJTDRolldown() {
+      JTDRolldown = null;
+      fieldSetFlags()[3] = false;
+      return this;
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public IssuerRiskLine build() {
@@ -384,6 +458,7 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
         record.SMCI = fieldSetFlags()[0] ? this.SMCI : (java.lang.String) defaultValue(fields()[0]);
         record.CR01 = fieldSetFlags()[1] ? this.CR01 : (java.lang.Double) defaultValue(fields()[1]);
         record.JTD = fieldSetFlags()[2] ? this.JTD : (java.lang.Double) defaultValue(fields()[2]);
+        record.JTDRolldown = fieldSetFlags()[3] ? this.JTDRolldown : (java.util.List<org.uwh.RolldownItem>) defaultValue(fields()[3]);
         return record;
       } catch (org.apache.avro.AvroMissingFieldException e) {
         throw e;
@@ -411,51 +486,6 @@ public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase 
     READER$.read(this, SpecificData.getDecoder(in));
   }
 
-  @Override protected boolean hasCustomCoders() { return true; }
-
-  @Override public void customEncode(org.apache.avro.io.Encoder out)
-    throws java.io.IOException
-  {
-    out.writeString(this.SMCI);
-
-    out.writeDouble(this.CR01);
-
-    out.writeDouble(this.JTD);
-
-  }
-
-  @Override public void customDecode(org.apache.avro.io.ResolvingDecoder in)
-    throws java.io.IOException
-  {
-    org.apache.avro.Schema.Field[] fieldOrder = in.readFieldOrderIfDiff();
-    if (fieldOrder == null) {
-      this.SMCI = in.readString();
-
-      this.CR01 = in.readDouble();
-
-      this.JTD = in.readDouble();
-
-    } else {
-      for (int i = 0; i < 3; i++) {
-        switch (fieldOrder[i].pos()) {
-        case 0:
-          this.SMCI = in.readString();
-          break;
-
-        case 1:
-          this.CR01 = in.readDouble();
-          break;
-
-        case 2:
-          this.JTD = in.readDouble();
-          break;
-
-        default:
-          throw new java.io.IOException("Corrupt ResolvingDecoder.");
-        }
-      }
-    }
-  }
 }
 
 

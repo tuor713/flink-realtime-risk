@@ -39,7 +39,7 @@ public class RiskJoin extends KeyedBroadcastProcessFunction<String, Either<Recor
         broadcastStateDescriptor = new MapStateDescriptor<>("broadcast", Types.STRING, issuerType);
 
         // cannot use riskType because that is the batch level risk
-        resType = new RecordType(riskType.getConfig(), F_RISK_ISSUER_JTD, F_RISK_ISSUER_CR01).join(posType).join(issuerType);
+        resType = new RecordType(riskType.getConfig(), F_RISK_ISSUER_JTD, F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD_ROLLDOWN).join(posType).join(issuerType);
     }
 
     public MapStateDescriptor<String,Record> getMapStateDescriptor() {
@@ -172,6 +172,7 @@ public class RiskJoin extends KeyedBroadcastProcessFunction<String, Either<Recor
 
         return res.with(F_ISSUER_ID, risk.getSMCI())
                 .with(F_RISK_ISSUER_CR01, risk.getCR01())
-                .with(F_RISK_ISSUER_JTD, risk.getJTD());
+                .with(F_RISK_ISSUER_JTD, risk.getJTD())
+                .with(F_RISK_ISSUER_JTD_ROLLDOWN, risk.getJTDRolldown());
     }
 }

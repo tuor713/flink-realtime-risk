@@ -2,9 +2,45 @@ package org.uwh.flink.data.generic;
 
 import org.apache.flink.api.common.functions.MapFunction;
 
+import java.io.Serializable;
+
 public class Expressions {
     public interface FieldConverter<T,F> extends MapFunction<T,F> {
         Field<F> getField();
+    }
+
+    public interface Aggregation<IT,AGGT> extends Serializable {
+        Field<IT> getInputField();
+        Field<AGGT> getOutputField();
+        AGGT init(IT value, boolean retract);
+        AGGT update(IT value, AGGT accumulator, boolean retract);
+    }
+
+    public static Aggregation<Double,Double> sum(Field<Double> field) {
+        return new Aggregation<Double, Double>() {
+            @Override
+            public Field<Double> getInputField() {
+                return field;
+            }
+
+            @Override
+            public Field<Double> getOutputField() {
+                return field;
+            }
+
+            public Double init(Double value, boolean retract) {
+                return retract ? -value : value;
+            }
+
+            @Override
+            public Double update(Double value, Double accumulator, boolean retract) {
+                if (retract) {
+                    return accumulator - value;
+                } else {
+                    return accumulator + value;
+                }
+            }
+        };
     }
 
     // Special case placeholder

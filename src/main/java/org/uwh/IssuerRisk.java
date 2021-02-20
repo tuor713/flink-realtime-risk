@@ -14,11 +14,14 @@ import org.apache.avro.message.SchemaStore;
 
 @org.apache.avro.specific.AvroGenerated
 public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
-  private static final long serialVersionUID = 7228360514919572649L;
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"IssuerRisk\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"UIDType\",\"type\":{\"type\":\"enum\",\"name\":\"UIDType\",\"symbols\":[\"UIPID\",\"UITID\"]}},{\"name\":\"UID\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"SMCI\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"BusinessDate\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"CR01\",\"type\":\"double\"},{\"name\":\"JTD\",\"type\":\"double\"},{\"name\":\"AuditDateTimeUTC\",\"type\":\"long\"}]}");
+  private static final long serialVersionUID = -6057254107594201435L;
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"IssuerRisk\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"UIDType\",\"type\":{\"type\":\"enum\",\"name\":\"UIDType\",\"symbols\":[\"UIPID\",\"UITID\"]}},{\"name\":\"UID\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"SMCI\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"BusinessDate\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"CR01\",\"type\":\"double\"},{\"name\":\"JTD\",\"type\":\"double\"},{\"name\":\"JTDRolldown\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"RolldownItem\",\"fields\":[{\"name\":\"Date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},{\"name\":\"JTD\",\"type\":\"float\"}]}}},{\"name\":\"AuditDateTimeUTC\",\"type\":\"long\"}]}");
   public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
   private static SpecificData MODEL$ = new SpecificData();
+static {
+    MODEL$.addLogicalTypeConversion(new org.apache.avro.data.TimeConversions.DateConversion());
+  }
 
   private static final BinaryMessageEncoder<IssuerRisk> ENCODER =
       new BinaryMessageEncoder<IssuerRisk>(MODEL$, SCHEMA$);
@@ -77,6 +80,7 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
    private java.lang.String BusinessDate;
    private double CR01;
    private double JTD;
+   private java.util.List<org.uwh.RolldownItem> JTDRolldown;
    private long AuditDateTimeUTC;
 
   /**
@@ -94,15 +98,17 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
    * @param BusinessDate The new value for BusinessDate
    * @param CR01 The new value for CR01
    * @param JTD The new value for JTD
+   * @param JTDRolldown The new value for JTDRolldown
    * @param AuditDateTimeUTC The new value for AuditDateTimeUTC
    */
-  public IssuerRisk(org.uwh.UIDType UIDType, java.lang.String UID, java.lang.String SMCI, java.lang.String BusinessDate, java.lang.Double CR01, java.lang.Double JTD, java.lang.Long AuditDateTimeUTC) {
+  public IssuerRisk(org.uwh.UIDType UIDType, java.lang.String UID, java.lang.String SMCI, java.lang.String BusinessDate, java.lang.Double CR01, java.lang.Double JTD, java.util.List<org.uwh.RolldownItem> JTDRolldown, java.lang.Long AuditDateTimeUTC) {
     this.UIDType = UIDType;
     this.UID = UID;
     this.SMCI = SMCI;
     this.BusinessDate = BusinessDate;
     this.CR01 = CR01;
     this.JTD = JTD;
+    this.JTDRolldown = JTDRolldown;
     this.AuditDateTimeUTC = AuditDateTimeUTC;
   }
 
@@ -117,7 +123,8 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
     case 3: return BusinessDate;
     case 4: return CR01;
     case 5: return JTD;
-    case 6: return AuditDateTimeUTC;
+    case 6: return JTDRolldown;
+    case 7: return AuditDateTimeUTC;
     default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
   }
@@ -132,7 +139,8 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
     case 3: BusinessDate = value$ != null ? value$.toString() : null; break;
     case 4: CR01 = (java.lang.Double)value$; break;
     case 5: JTD = (java.lang.Double)value$; break;
-    case 6: AuditDateTimeUTC = (java.lang.Long)value$; break;
+    case 6: JTDRolldown = (java.util.List<org.uwh.RolldownItem>)value$; break;
+    case 7: AuditDateTimeUTC = (java.lang.Long)value$; break;
     default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
   }
@@ -240,6 +248,23 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
   }
 
   /**
+   * Gets the value of the 'JTDRolldown' field.
+   * @return The value of the 'JTDRolldown' field.
+   */
+  public java.util.List<org.uwh.RolldownItem> getJTDRolldown() {
+    return JTDRolldown;
+  }
+
+
+  /**
+   * Sets the value of the 'JTDRolldown' field.
+   * @param value the value to set.
+   */
+  public void setJTDRolldown(java.util.List<org.uwh.RolldownItem> value) {
+    this.JTDRolldown = value;
+  }
+
+  /**
    * Gets the value of the 'AuditDateTimeUTC' field.
    * @return The value of the 'AuditDateTimeUTC' field.
    */
@@ -303,6 +328,7 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
     private java.lang.String BusinessDate;
     private double CR01;
     private double JTD;
+    private java.util.List<org.uwh.RolldownItem> JTDRolldown;
     private long AuditDateTimeUTC;
 
     /** Creates a new Builder */
@@ -340,9 +366,13 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
         this.JTD = data().deepCopy(fields()[5].schema(), other.JTD);
         fieldSetFlags()[5] = other.fieldSetFlags()[5];
       }
-      if (isValidValue(fields()[6], other.AuditDateTimeUTC)) {
-        this.AuditDateTimeUTC = data().deepCopy(fields()[6].schema(), other.AuditDateTimeUTC);
+      if (isValidValue(fields()[6], other.JTDRolldown)) {
+        this.JTDRolldown = data().deepCopy(fields()[6].schema(), other.JTDRolldown);
         fieldSetFlags()[6] = other.fieldSetFlags()[6];
+      }
+      if (isValidValue(fields()[7], other.AuditDateTimeUTC)) {
+        this.AuditDateTimeUTC = data().deepCopy(fields()[7].schema(), other.AuditDateTimeUTC);
+        fieldSetFlags()[7] = other.fieldSetFlags()[7];
       }
     }
 
@@ -376,9 +406,13 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
         this.JTD = data().deepCopy(fields()[5].schema(), other.JTD);
         fieldSetFlags()[5] = true;
       }
-      if (isValidValue(fields()[6], other.AuditDateTimeUTC)) {
-        this.AuditDateTimeUTC = data().deepCopy(fields()[6].schema(), other.AuditDateTimeUTC);
+      if (isValidValue(fields()[6], other.JTDRolldown)) {
+        this.JTDRolldown = data().deepCopy(fields()[6].schema(), other.JTDRolldown);
         fieldSetFlags()[6] = true;
+      }
+      if (isValidValue(fields()[7], other.AuditDateTimeUTC)) {
+        this.AuditDateTimeUTC = data().deepCopy(fields()[7].schema(), other.AuditDateTimeUTC);
+        fieldSetFlags()[7] = true;
       }
     }
 
@@ -621,6 +655,46 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
     }
 
     /**
+      * Gets the value of the 'JTDRolldown' field.
+      * @return The value.
+      */
+    public java.util.List<org.uwh.RolldownItem> getJTDRolldown() {
+      return JTDRolldown;
+    }
+
+
+    /**
+      * Sets the value of the 'JTDRolldown' field.
+      * @param value The value of 'JTDRolldown'.
+      * @return This builder.
+      */
+    public org.uwh.IssuerRisk.Builder setJTDRolldown(java.util.List<org.uwh.RolldownItem> value) {
+      validate(fields()[6], value);
+      this.JTDRolldown = value;
+      fieldSetFlags()[6] = true;
+      return this;
+    }
+
+    /**
+      * Checks whether the 'JTDRolldown' field has been set.
+      * @return True if the 'JTDRolldown' field has been set, false otherwise.
+      */
+    public boolean hasJTDRolldown() {
+      return fieldSetFlags()[6];
+    }
+
+
+    /**
+      * Clears the value of the 'JTDRolldown' field.
+      * @return This builder.
+      */
+    public org.uwh.IssuerRisk.Builder clearJTDRolldown() {
+      JTDRolldown = null;
+      fieldSetFlags()[6] = false;
+      return this;
+    }
+
+    /**
       * Gets the value of the 'AuditDateTimeUTC' field.
       * @return The value.
       */
@@ -635,9 +709,9 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
       * @return This builder.
       */
     public org.uwh.IssuerRisk.Builder setAuditDateTimeUTC(long value) {
-      validate(fields()[6], value);
+      validate(fields()[7], value);
       this.AuditDateTimeUTC = value;
-      fieldSetFlags()[6] = true;
+      fieldSetFlags()[7] = true;
       return this;
     }
 
@@ -646,7 +720,7 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
       * @return True if the 'AuditDateTimeUTC' field has been set, false otherwise.
       */
     public boolean hasAuditDateTimeUTC() {
-      return fieldSetFlags()[6];
+      return fieldSetFlags()[7];
     }
 
 
@@ -655,7 +729,7 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
       * @return This builder.
       */
     public org.uwh.IssuerRisk.Builder clearAuditDateTimeUTC() {
-      fieldSetFlags()[6] = false;
+      fieldSetFlags()[7] = false;
       return this;
     }
 
@@ -670,7 +744,8 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
         record.BusinessDate = fieldSetFlags()[3] ? this.BusinessDate : (java.lang.String) defaultValue(fields()[3]);
         record.CR01 = fieldSetFlags()[4] ? this.CR01 : (java.lang.Double) defaultValue(fields()[4]);
         record.JTD = fieldSetFlags()[5] ? this.JTD : (java.lang.Double) defaultValue(fields()[5]);
-        record.AuditDateTimeUTC = fieldSetFlags()[6] ? this.AuditDateTimeUTC : (java.lang.Long) defaultValue(fields()[6]);
+        record.JTDRolldown = fieldSetFlags()[6] ? this.JTDRolldown : (java.util.List<org.uwh.RolldownItem>) defaultValue(fields()[6]);
+        record.AuditDateTimeUTC = fieldSetFlags()[7] ? this.AuditDateTimeUTC : (java.lang.Long) defaultValue(fields()[7]);
         return record;
       } catch (org.apache.avro.AvroMissingFieldException e) {
         throw e;
@@ -698,83 +773,6 @@ public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase impl
     READER$.read(this, SpecificData.getDecoder(in));
   }
 
-  @Override protected boolean hasCustomCoders() { return true; }
-
-  @Override public void customEncode(org.apache.avro.io.Encoder out)
-    throws java.io.IOException
-  {
-    out.writeEnum(this.UIDType.ordinal());
-
-    out.writeString(this.UID);
-
-    out.writeString(this.SMCI);
-
-    out.writeString(this.BusinessDate);
-
-    out.writeDouble(this.CR01);
-
-    out.writeDouble(this.JTD);
-
-    out.writeLong(this.AuditDateTimeUTC);
-
-  }
-
-  @Override public void customDecode(org.apache.avro.io.ResolvingDecoder in)
-    throws java.io.IOException
-  {
-    org.apache.avro.Schema.Field[] fieldOrder = in.readFieldOrderIfDiff();
-    if (fieldOrder == null) {
-      this.UIDType = org.uwh.UIDType.values()[in.readEnum()];
-
-      this.UID = in.readString();
-
-      this.SMCI = in.readString();
-
-      this.BusinessDate = in.readString();
-
-      this.CR01 = in.readDouble();
-
-      this.JTD = in.readDouble();
-
-      this.AuditDateTimeUTC = in.readLong();
-
-    } else {
-      for (int i = 0; i < 7; i++) {
-        switch (fieldOrder[i].pos()) {
-        case 0:
-          this.UIDType = org.uwh.UIDType.values()[in.readEnum()];
-          break;
-
-        case 1:
-          this.UID = in.readString();
-          break;
-
-        case 2:
-          this.SMCI = in.readString();
-          break;
-
-        case 3:
-          this.BusinessDate = in.readString();
-          break;
-
-        case 4:
-          this.CR01 = in.readDouble();
-          break;
-
-        case 5:
-          this.JTD = in.readDouble();
-          break;
-
-        case 6:
-          this.AuditDateTimeUTC = in.readLong();
-          break;
-
-        default:
-          throw new java.io.IOException("Corrupt ResolvingDecoder.");
-        }
-      }
-    }
-  }
 }
 
 

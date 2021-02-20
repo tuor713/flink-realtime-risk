@@ -11,14 +11,17 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.FromElementsFunction;
 import org.apache.flink.types.Either;
 import org.uwh.*;
+import org.uwh.flink.data.generic.Field;
 import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.Stream;
 import org.uwh.flink.util.DelayedSourceFunction;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
-import static org.uwh.flink.data.generic.Expressions.$;
-import static org.uwh.flink.data.generic.Expressions.as;
+import static org.uwh.flink.data.generic.Expressions.*;
 import static org.uwh.risk.Fields.*;
 
 public class MainJob {
@@ -110,7 +113,14 @@ public class MainJob {
 
         // === Tier 2 logic ===
 
-        Stream aggStream = finalStream.aggregate(List.of(F_ISSUER_ULTIMATE_PARENT_ID), List.of(F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD), 10_000);
+        Stream aggStream = finalStream.aggregate(
+                List.of(F_ISSUER_ULTIMATE_PARENT_ID),
+                List.of(
+                        sum(F_RISK_ISSUER_CR01),
+                        sum(F_RISK_ISSUER_JTD),
+                        new RolldownAggegration()
+                ),
+                10_000);
 
         DataStream<RiskThreshold> thresholdStream = Generators.thresholds(env, Generators.NO_ULTIMATE);
 
@@ -134,5 +144,65 @@ public class MainJob {
         ).log("LIMIT", 1_000);
 
         env.execute();
+    }
+
+    private static class RolldownAggegration implements Aggregation<List<RolldownItem>,List<RolldownItem>> {
+        @Override
+        public Field<List<RolldownItem>> getInputField() {
+            return F_RISK_ISSUER_JTD_ROLLDOWN;
+        }
+
+        @Override
+        public Field<List<RolldownItem>> getOutputField() {
+            return F_RISK_ISSUER_JTD_ROLLDOWN;
+        }
+
+        @Override
+        public List<RolldownItem> init(List<RolldownItem> value, boolean retract) {
+            if (retract) {
+                return value.stream().map(it -> new RolldownItem(it.getDate(), -it.getJTD())).collect(Collectors.toList());
+            } else {
+                return value;
+            }
+        }
+
+        @Override
+        public List<RolldownItem> update(List<RolldownItem> value, List<RolldownItem> accumulator, boolean retract) {
+            float factor = retract ? -1 : 1;
+            List<RolldownItem> result = new ArrayList<>();
+
+            int i = 0;
+            int j = 0;
+            while (i < value.size() || j < accumulator.size()) {
+                if (i == value.size()) {
+                    for (int k = j; k<accumulator.size(); k++) {
+                        result.add(accumulator.get(k));
+                    }
+                    break;
+                }
+                if (j == accumulator.size()) {
+                    for (int k = i; k<value.size(); k++) {
+                        result.add(new RolldownItem(value.get(k).getDate(), value.get(k).getJTD()));
+                    }
+                    break;
+                }
+
+                LocalDate iDate = value.get(i).getDate();
+                LocalDate jDate = accumulator.get(j).getDate();
+                if (iDate.equals(jDate)) {
+                    result.add(new RolldownItem(iDate, accumulator.get(j).getJTD() + factor * value.get(i).getJTD()));
+                    i++;
+                    j++;
+                } else if (iDate.isBefore(jDate)) {
+                    result.add(new RolldownItem(iDate, factor * value.get(i).getJTD()));
+                    i++;
+                } else {
+                    result.add(accumulator.get(j));
+                    j++;
+                }
+            }
+
+            return result;
+        }
     }
 }

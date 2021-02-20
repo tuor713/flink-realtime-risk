@@ -15,13 +15,18 @@ import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
 import org.uwh.Issuer;
 import org.uwh.IssuerRisk;
+import org.uwh.RolldownItem;
 import org.uwh.UIDType;
 import org.uwh.flink.data.generic.Field;
 import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.RecordType;
 
+import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class SerializationTest {
     private static final Field<String> F_ISSUER_ID = new Field<>("issuer","id", String.class, Types.STRING);
@@ -74,12 +79,23 @@ public class SerializationTest {
 
         System.out.println("=== Issuer Risk ===");
         System.out.println("Avro: " + serializedLength(
-                new IssuerRisk(UIDType.UIPID, "BOOK:123", "1", "20201231", 100.0, 1000000.0, System.currentTimeMillis()),
+                new IssuerRisk(UIDType.UIPID, "BOOK:123", "1", "20201231", 100.0, 1000000.0, Collections.emptyList(), System.currentTimeMillis()),
                 TypeInformation.of(IssuerRisk.class)
         ));
 
+        // date (int) + float = 8 bytes per entry
+        //  = 160 bytes payload
+        //  Total overhead 161 bytes = 160 + 1 byte for length
+        System.out.println("Avro + 20 rolldown: " + serializedLength(
+                new IssuerRisk(UIDType.UIPID, "BOOK:123", "1", "20201231", 100.0, 1000000.0,
+                        IntStream.range(0,20).mapToObj(i -> new RolldownItem(LocalDate.now(), (float) 1000000.0)).collect(Collectors.toList()),
+                        System.currentTimeMillis()),
+                TypeInformation.of(IssuerRisk.class)
+        ));
+
+
         System.out.println("Tuple[RowKind,Avro]: " + serializedLength(
-                Tuple2.of(RowKind.INSERT, new IssuerRisk(UIDType.UIPID, "BOOK:123", "1", "20201231", 100.0, 1000000.0, System.currentTimeMillis())),
+                Tuple2.of(RowKind.INSERT, new IssuerRisk(UIDType.UIPID, "BOOK:123", "1", "20201231", 100.0, 1000000.0, Collections.emptyList(), System.currentTimeMillis())),
                 new TupleTypeInfo<>(TypeInformation.of(RowKind.class), TypeInformation.of(IssuerRisk.class))
         ));
 

@@ -229,9 +229,14 @@ public class Stream implements Serializable {
         return new Stream(resStream, resType, mode);
     }
 
-    public Stream aggregate(Collection<Field> dimensions, Collection<Field<Double>> aggregations, long throttleMs) {
+    public Stream aggregateFields(Collection<Field> dimensions, Collection<Field<Double>> aggregations, long throttleMs) {
+        return aggregate(dimensions, aggregations.stream().map(f -> Expressions.sum(f)).collect(Collectors.toList()), throttleMs);
+    }
+
+    public Stream aggregate(Collection<Field> dimensions, Collection<Expressions.Aggregation> aggregations, long throttleMs) {
         List<Field> resFields = new ArrayList<>(dimensions);
-        resFields.addAll(aggregations);
+        aggregations.forEach(agg -> resFields.add(agg.getOutputField()));
+
         RecordType dimType = new RecordType(type.getConfig(), dimensions);
         RecordType resType = new RecordType(type.getConfig(), resFields);
 
@@ -294,12 +299,15 @@ public class Stream implements Serializable {
                             res.set(dim, next.get(dim));
                         }
 
-                        for (Field<Double> agg : aggregations) {
-                            double value = next.get(agg);
-                            if (next.getKind() == RowKind.DELETE || next.getKind() == RowKind.UPDATE_BEFORE) {
-                                value = -value;
+                        for (Expressions.Aggregation agg : aggregations) {
+                            Object value = next.get(agg.getInputField());
+                            boolean retract = next.getKind() == RowKind.DELETE || next.getKind() == RowKind.UPDATE_BEFORE;
+                            Object prev = (current != null) ? current.get(agg.getOutputField()) : null;
+                            if (prev == null) {
+                                res.set(agg.getOutputField(), agg.init(value, retract));
+                            } else {
+                                res.set(agg.getOutputField(), agg.update(value, prev, retract));
                             }
-                            res.set(agg, ((current != null) ? current.get(agg) : 0) + value);
                         }
 
                         return res;

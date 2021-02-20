@@ -152,6 +152,25 @@
 
   {
     "namespace": "org.uwh",
+    "type": "record",
+    "name": "RolldownItem",
+    "fields": [
+      {
+        "name": "Date",
+        "type": {
+          "type": "int",
+          "logicalType": "date"
+        }
+      },
+      {
+        "name": "JTD",
+        "type": "float"
+      }
+    ]
+  },
+
+  {
+    "namespace": "org.uwh",
     "name": "IssuerRisk",
     "type": "record",
     "fields": [
@@ -178,6 +197,13 @@
       {
         "name": "JTD",
         "type": "double"
+      },
+      {
+        "name": "JTDRolldown",
+        "type": {
+          "type": "array",
+          "items": "RolldownItem"
+        }
       },
       {
         "name": "AuditDateTimeUTC",
@@ -225,6 +251,13 @@
               {
                 "name": "JTD",
                 "type": "double"
+              },
+              {
+                "name": "JTDRolldown",
+                "type": {
+                  "type": "array",
+                  "items": "RolldownItem"
+                }
               }
             ]
           }

@@ -8,6 +8,7 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.uwh.*;
 
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -24,6 +25,7 @@ public class Generators {
     public static final int NO_ULTIMATE = 1_000;
     public static final int NO_POSITION = 500_000;
     public static final int NO_ISSUERS_FOR_INDEX = 125;
+    public static final int NO_JTD_ROLLDOWN = 20;
 
     private static final String COB = DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now());
 
@@ -69,7 +71,7 @@ public class Generators {
 
         Tuple2<UIDType,String> uid = generateUID(tradeId, posLimit);
 
-        return new IssuerRisk(uid.f0, uid.f1, String.valueOf(issuerId), COB, randomCR01(r), randomJTD(r), System.currentTimeMillis());
+        return new IssuerRisk(uid.f0, uid.f1, String.valueOf(issuerId), COB, randomCR01(r), randomJTD(r), Collections.emptyList(), System.currentTimeMillis());
     }
 
     private static IssuerRisk randomRisk(Random r, int posLimit, int issuerLimit) {
@@ -81,6 +83,16 @@ public class Generators {
         return type == UIDType.UITID && r % 4 == 0;
     }
 
+    private static List<RolldownItem> rolldownItems(double jtd) {
+        List<RolldownItem> items = new ArrayList<>();
+        LocalDate date = LocalDate.now();
+        for (int i=0; i<NO_JTD_ROLLDOWN; i++) {
+            items.add(new RolldownItem(date.plusDays(i), (float)jtd/NO_JTD_ROLLDOWN));
+        }
+
+        return items;
+    }
+
     private static IssuerRiskBatch randomBatchRisk(Random r, int id, int posLimit, int issuerLimit) {
         Tuple2<UIDType, String> uid = generateUID(id, posLimit);
 
@@ -89,11 +101,13 @@ public class Generators {
             risks = new ArrayList<>(NO_ISSUERS_FOR_INDEX);
             int index = id % 4;
             for (int issuerId = NO_ISSUERS_FOR_INDEX*index; issuerId < NO_ISSUERS_FOR_INDEX*(index+1); issuerId++) {
-                risks.add(new IssuerRiskLine(String.valueOf(issuerId), randomCR01(r), randomJTD(r)));
+                double jtd = randomJTD(r);
+                risks.add(new IssuerRiskLine(String.valueOf(issuerId), randomCR01(r), jtd, rolldownItems(jtd)));
             }
         } else {
             String issuerId = String.valueOf(((id & 1) == 1) ? id % issuerLimit : id % (issuerLimit/10));
-            risks = List.of(new IssuerRiskLine(issuerId, randomCR01(r), randomJTD(r)));
+            double jtd = randomJTD(r);
+            risks = List.of(new IssuerRiskLine(issuerId, randomCR01(r), jtd, rolldownItems(jtd)));
         }
 
         return new IssuerRiskBatch(uid.f0, uid.f1, COB, System.currentTimeMillis(), risks);

@@ -156,9 +156,9 @@ public class SpartaDataStreamTest {
     @Test
     public void testThrottledRiskRetriggers() throws Exception {
         builder.setRiskSource(Sources.start(env, TypeInformation.of(IssuerRisk.class))
-                .then(Collections.singleton(new IssuerRisk(UIDType.UITID, "T1", "IBM", COB, 10.0, 50.0, 1L)))
+                .then(Collections.singleton(new IssuerRisk(UIDType.UITID, "T1", "IBM", COB, 10.0, 50.0, Collections.emptyList(), 1L)))
                 .delay(500)
-                .then(Collections.singleton(new IssuerRisk(UIDType.UITID, "T1", "IBM", COB, 10.0, 100.0, 2L)))
+                .then(Collections.singleton(new IssuerRisk(UIDType.UITID, "T1", "IBM", COB, 10.0, 100.0, Collections.emptyList(), 2L)))
                 .toStream());
         builder.setRiskPositionSource(Sources.start(env, TypeInformation.of(RiskPosition.class))
                 .then(Collections.singleton(new RiskPosition(UIDType.UITID, "T1", "BOOK", ProductType.CDS, 1L)))
@@ -232,8 +232,8 @@ public class SpartaDataStreamTest {
     @Test
     public void testCanHandleSameTradeIdWithDifferentType() throws Exception {
         withRiskRecords(
-                new IssuerRisk(UIDType.UITID, "T1", "IBM", COB, 0.0, 50.0, 1L),
-                new IssuerRisk(UIDType.UIPID, "T1", "IBM", COB, 0.0, 50.0, 2L)
+                new IssuerRisk(UIDType.UITID, "T1", "IBM", COB, 0.0, 50.0, Collections.emptyList(), 1L),
+                new IssuerRisk(UIDType.UIPID, "T1", "IBM", COB, 0.0, 50.0, Collections.emptyList(), 2L)
         );
 
         run();
@@ -242,7 +242,7 @@ public class SpartaDataStreamTest {
     }
 
     private void withRiskRecords(Tuple4<String, String, Double, Long>... recs) throws Exception {
-        List<IssuerRisk> risk = Arrays.stream(recs).map(t -> new IssuerRisk(UIDType.UITID, t.f1, t.f0, COB, 0.0, t.f2, t.f3)).collect(Collectors.toList());
+        List<IssuerRisk> risk = Arrays.stream(recs).map(t -> new IssuerRisk(UIDType.UITID, t.f1, t.f0, COB, 0.0, t.f2, Collections.emptyList(), t.f3)).collect(Collectors.toList());
         List<RiskPosition> pos = Arrays.stream(recs).map(t -> new RiskPosition(UIDType.UITID, t.f1, "BOOK", ProductType.CDS, 1L)).collect(Collectors.toList());
 
         builder.setRiskSource(env.fromCollection(risk));

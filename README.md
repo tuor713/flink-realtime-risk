@@ -1,39 +1,28 @@
 # Real Time Issuer Risk in Flink 
 
-## Approach 
-Handle all logic in one workflow, use Flink for latest statement management.
+The project demonstrates a risk processing flow, with simulated inputs, that includes 
+- live joins (on both sides)
+- aggregation, as well as throttling
+- limit calculation against a stream of thresholds
 
-#### Flow
+The project also introduces an API layer similar to Flink SQL API but with the ability to easily drop 
+back to Datastreams. As part of that, it introduces a generic record type powered by a generic
+Avro schema internally.
+
+### Flow
+
+The flow is structured along the lines of a traditional snowflake schema with dimensions
+joining in from the further branches and converging on the main risk stream (aka the fact table).
+One particular optimization is to optimize the final join of issuer risk, positions and issuers
+as a single operator that uses broadcast on the issuer dimension to avoid multiple shuffle
+steps.
+
+The flow is as follows:
 
 ```
-Risk + Position -> (Risk, Position) -> RiskAggregate<IssuerId, AccountId>
+S1: Issuer join with parent isuer 
+S2: Position join with firm account
+S3: Issuer risk join with S2 and broadcasted S1
+S4: Aggregate S3 to issuer level
+S4: Join S3 with issuer limit thresholds and calculate limit utilization
 ```
-
-## Problems to solve 
-
-#### How to account for updates to ref data like account changes
-Some changes will come for free such as trade updates triggering risk updates. For others though
-such as account updates the system has to accommodate the update.
-
-Is there a point to try to use broadcast streams 
-
-#### Trade risk changes from one issuer to another
-
-#### Is there a generic notion of RiskAggregate that works for trades & aggregates
-
-#### How to support drilldown to trade level 
-
-#### Alternatively how do we extract a full set of consistent data
-For example, can we use a broadcast stream
-
-#### How to join issuer, accounts and products?
-
-#### How to implement complex business logic such as limits
-
-#### How to support batched updates?
-- Could we use the Flink watermarks to insert boundaries where data has been fully processed?
-- Batching needs to be handled until the very end(s) (or risk updates sent as big messages) because otherwise 
-partial data could continue to arise in later processing.
-  
-#### How to query data
-Select query against in memory cache via broadcast stream

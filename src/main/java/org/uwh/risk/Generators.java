@@ -25,7 +25,7 @@ public class Generators {
     public static final int NO_ULTIMATE = 1_000;
     public static final int NO_POSITION = 500_000;
     public static final int NO_ISSUERS_FOR_INDEX = 125;
-    public static final int NO_JTD_ROLLDOWN = 20;
+    public static final int NO_JTD_ROLLDOWN = 2;
 
     private static final String COB = DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now());
 
@@ -87,7 +87,7 @@ public class Generators {
         List<RolldownItem> items = new ArrayList<>();
         LocalDate date = LocalDate.now();
         for (int i=0; i<NO_JTD_ROLLDOWN; i++) {
-            items.add(new RolldownItem(date.plusDays(i), jtd/NO_JTD_ROLLDOWN));
+            items.add(new RolldownItem((int) date.plusDays(i).toEpochDay(), jtd/NO_JTD_ROLLDOWN));
         }
 
         return items;

@@ -15,13 +15,10 @@ import org.apache.avro.message.SchemaStore;
 @org.apache.avro.specific.AvroGenerated
 public class RolldownItem extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
   private static final long serialVersionUID = -8396342249704156444L;
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"RolldownItem\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"Date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},{\"name\":\"JTD\",\"type\":\"double\"}]}");
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"RolldownItem\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"Date\",\"type\":\"int\"},{\"name\":\"JTD\",\"type\":\"double\"}]}");
   public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
   private static SpecificData MODEL$ = new SpecificData();
-static {
-    MODEL$.addLogicalTypeConversion(new org.apache.avro.data.TimeConversions.DateConversion());
-  }
 
   private static final BinaryMessageEncoder<RolldownItem> ENCODER =
       new BinaryMessageEncoder<RolldownItem>(MODEL$, SCHEMA$);
@@ -74,7 +71,7 @@ static {
     return DECODER.decode(b);
   }
 
-   private java.time.LocalDate Date;
+   private int Date;
    private double JTD;
 
   /**
@@ -89,7 +86,7 @@ static {
    * @param Date The new value for Date
    * @param JTD The new value for JTD
    */
-  public RolldownItem(java.time.LocalDate Date, java.lang.Double JTD) {
+  public RolldownItem(java.lang.Integer Date, java.lang.Double JTD) {
     this.Date = Date;
     this.JTD = JTD;
   }
@@ -105,23 +102,11 @@ static {
     }
   }
 
-  private static final org.apache.avro.Conversion<?>[] conversions =
-      new org.apache.avro.Conversion<?>[] {
-      new org.apache.avro.data.TimeConversions.DateConversion(),
-      null,
-      null
-  };
-
-  @Override
-  public org.apache.avro.Conversion<?> getConversion(int field) {
-    return conversions[field];
-  }
-
   // Used by DatumReader.  Applications should not call.
   @SuppressWarnings(value="unchecked")
   public void put(int field$, java.lang.Object value$) {
     switch (field$) {
-    case 0: Date = (java.time.LocalDate)value$; break;
+    case 0: Date = (java.lang.Integer)value$; break;
     case 1: JTD = (java.lang.Double)value$; break;
     default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
@@ -131,7 +116,7 @@ static {
    * Gets the value of the 'Date' field.
    * @return The value of the 'Date' field.
    */
-  public java.time.LocalDate getDate() {
+  public int getDate() {
     return Date;
   }
 
@@ -140,7 +125,7 @@ static {
    * Sets the value of the 'Date' field.
    * @param value the value to set.
    */
-  public void setDate(java.time.LocalDate value) {
+  public void setDate(int value) {
     this.Date = value;
   }
 
@@ -202,7 +187,7 @@ static {
   public static class Builder extends org.apache.avro.specific.SpecificRecordBuilderBase<RolldownItem>
     implements org.apache.avro.data.RecordBuilder<RolldownItem> {
 
-    private java.time.LocalDate Date;
+    private int Date;
     private double JTD;
 
     /** Creates a new Builder */
@@ -246,7 +231,7 @@ static {
       * Gets the value of the 'Date' field.
       * @return The value.
       */
-    public java.time.LocalDate getDate() {
+    public int getDate() {
       return Date;
     }
 
@@ -256,7 +241,7 @@ static {
       * @param value The value of 'Date'.
       * @return This builder.
       */
-    public org.uwh.RolldownItem.Builder setDate(java.time.LocalDate value) {
+    public org.uwh.RolldownItem.Builder setDate(int value) {
       validate(fields()[0], value);
       this.Date = value;
       fieldSetFlags()[0] = true;
@@ -325,7 +310,7 @@ static {
     public RolldownItem build() {
       try {
         RolldownItem record = new RolldownItem();
-        record.Date = fieldSetFlags()[0] ? this.Date : (java.time.LocalDate) defaultValue(fields()[0]);
+        record.Date = fieldSetFlags()[0] ? this.Date : (java.lang.Integer) defaultValue(fields()[0]);
         record.JTD = fieldSetFlags()[1] ? this.JTD : (java.lang.Double) defaultValue(fields()[1]);
         return record;
       } catch (org.apache.avro.AvroMissingFieldException e) {
@@ -354,6 +339,43 @@ static {
     READER$.read(this, SpecificData.getDecoder(in));
   }
 
+  @Override protected boolean hasCustomCoders() { return true; }
+
+  @Override public void customEncode(org.apache.avro.io.Encoder out)
+    throws java.io.IOException
+  {
+    out.writeInt(this.Date);
+
+    out.writeDouble(this.JTD);
+
+  }
+
+  @Override public void customDecode(org.apache.avro.io.ResolvingDecoder in)
+    throws java.io.IOException
+  {
+    org.apache.avro.Schema.Field[] fieldOrder = in.readFieldOrderIfDiff();
+    if (fieldOrder == null) {
+      this.Date = in.readInt();
+
+      this.JTD = in.readDouble();
+
+    } else {
+      for (int i = 0; i < 2; i++) {
+        switch (fieldOrder[i].pos()) {
+        case 0:
+          this.Date = in.readInt();
+          break;
+
+        case 1:
+          this.JTD = in.readDouble();
+          break;
+
+        default:
+          throw new java.io.IOException("Corrupt ResolvingDecoder.");
+        }
+      }
+    }
+  }
 }
 
 

@@ -1,17 +1,25 @@
 package org.uwh.flink.data.generic;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.specific.AvroGenerated;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.ListTypeInfo;
 import org.apache.flink.table.data.RawValueData;
 import org.apache.flink.table.data.binary.BinaryRawValueData;
 
 import java.io.Serializable;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<T> {
     private final String namespace;
@@ -118,6 +126,86 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
                     }
                 }
             };
+        } else if (clazz.isAnnotationPresent(AvroGenerated.class)) {
+            try {
+                Method m = clazz.getDeclaredMethod("getClassSchema");
+                Schema schema = (Schema) m.invoke(null);
+
+                return new FieldType<T>() {
+                    private transient List<Tuple2<Integer, java.lang.reflect.Field>> objFields = null;
+
+                    @Override
+                    public Schema getSchema() {
+                        return schema;
+                    }
+
+                    @Override
+                    public RecordType.FieldGetter<T> getFieldGetter(boolean nullable, int index) {
+                        return data -> {
+                            Object value = data.get(index);
+                            if (value instanceof GenericData.Record) {
+                                if (objFields == null) {
+                                    objFields = resolveFields(schema, clazz);
+                                }
+
+                                return convertGenericRecordToClass(clazz, objFields, (GenericData.Record) value);
+                            } else {
+                                return (T) value;
+                            }
+                        };
+                    }
+
+                    @Override
+                    public RecordType.FieldSetter<T> getFieldSetter(boolean nullable, int index) {
+                        return (data, value) -> data.put(index, value);
+                    }
+                };
+            } catch (Exception e) {
+                throw new IllegalStateException("Unsupported field type " + this, e);
+            }
+        } else if ((type instanceof ListTypeInfo) && ((ListTypeInfo) type).getElementTypeInfo().getTypeClass().isAnnotationPresent(AvroGenerated.class)) {
+            Class innerClazz = ((ListTypeInfo) type).getElementTypeInfo().getTypeClass();
+
+            try {
+                Method m = innerClazz.getDeclaredMethod("getClassSchema");
+                Schema schema = (Schema) m.invoke(null);
+
+                return new FieldType<T>() {
+                    private transient List<Tuple2<Integer, java.lang.reflect.Field>> objFields = null;
+
+                    @Override
+                    public Schema getSchema() {
+                        return Schema.createArray(schema);
+                    }
+
+                    @Override
+                    public RecordType.FieldGetter<T> getFieldGetter(boolean nullable, int index) {
+                        return data -> {
+                            List value = (List) data.get(index);
+                            if (!value.isEmpty() && value.get(0) instanceof GenericData.Record) {
+                                if (objFields == null) {
+                                    objFields = resolveFields(schema, innerClazz);
+                                }
+
+                                List res = new ArrayList(value.size());
+                                for (Object o : value) {
+                                    res.add(convertGenericRecordToClass(innerClazz, objFields, (GenericData.Record) o));
+                                }
+                                return (T) res;
+                            } else {
+                                return (T) value;
+                            }
+                        };
+                    }
+
+                    @Override
+                    public RecordType.FieldSetter<T> getFieldSetter(boolean nullable, int index) {
+                        return (data,value) -> data.put(index, value);
+                    }
+                };
+            } catch (Exception e) {
+                throw new IllegalStateException("Unsupported field type " + this, e);
+            }
         } else {
             TypeSerializer<T> serializer = type.createSerializer(config);
             return new FieldType<T>() {
@@ -154,6 +242,32 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
                     };
                 }
             };
+        }
+    }
+
+    private static List<Tuple2<Integer, java.lang.reflect.Field>> resolveFields(Schema schema, Class clazz) {
+        return schema.getFields().stream()
+                        .map(f -> {
+                            try {
+                                java.lang.reflect.Field objField = clazz.getDeclaredField(f.name());
+                                objField.setAccessible(true);
+                                return Tuple2.of(f.pos(), objField);
+                            } catch (NoSuchFieldException e) {
+                                throw new IllegalStateException("Avro schema field does on class " + f + " for " + clazz);
+                            }
+                        }).collect(Collectors.toList());
+    }
+
+    private static<T> T convertGenericRecordToClass(Class<T> clazz, List<Tuple2<Integer, java.lang.reflect.Field>> fields, GenericData.Record rec) {
+        try {
+            T res = clazz.newInstance();
+            for (Tuple2<Integer, java.lang.reflect.Field> tuple : fields) {
+                tuple.f1.set(res, rec.get(tuple.f0));
+            }
+
+            return res;
+        } catch (Exception e) {
+            throw new RuntimeException("Exception during conversion from generic Avro object to generated class", e);
         }
     }
 
@@ -194,7 +308,7 @@ public class Field<T> implements Serializable, Comparable<Field<T>>, Expression<
         return namespace + "/" + name;
     }
 
-    private interface FieldType<T> {
+    private interface FieldType<T> extends Serializable {
         Schema getSchema();
         RecordType.FieldGetter<T> getFieldGetter(boolean nullable, int index);
         RecordType.FieldSetter<T> getFieldSetter(boolean nullable, int index);

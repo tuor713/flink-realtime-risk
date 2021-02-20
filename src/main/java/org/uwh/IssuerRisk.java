@@ -15,13 +15,10 @@ import org.apache.avro.message.SchemaStore;
 @org.apache.avro.specific.AvroGenerated
 public class IssuerRisk extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
   private static final long serialVersionUID = -6522850179304667579L;
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"IssuerRisk\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"UIDType\",\"type\":{\"type\":\"enum\",\"name\":\"UIDType\",\"symbols\":[\"UIPID\",\"UITID\"]}},{\"name\":\"UID\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"SMCI\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"BusinessDate\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"CR01\",\"type\":\"double\"},{\"name\":\"JTD\",\"type\":\"double\"},{\"name\":\"JTDRolldown\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"RolldownItem\",\"fields\":[{\"name\":\"Date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},{\"name\":\"JTD\",\"type\":\"double\"}]}}},{\"name\":\"AuditDateTimeUTC\",\"type\":\"long\"}]}");
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"IssuerRisk\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"UIDType\",\"type\":{\"type\":\"enum\",\"name\":\"UIDType\",\"symbols\":[\"UIPID\",\"UITID\"]}},{\"name\":\"UID\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"SMCI\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"BusinessDate\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"CR01\",\"type\":\"double\"},{\"name\":\"JTD\",\"type\":\"double\"},{\"name\":\"JTDRolldown\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"RolldownItem\",\"fields\":[{\"name\":\"Date\",\"type\":\"int\"},{\"name\":\"JTD\",\"type\":\"double\"}]}}},{\"name\":\"AuditDateTimeUTC\",\"type\":\"long\"}]}");
   public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
   private static SpecificData MODEL$ = new SpecificData();
-static {
-    MODEL$.addLogicalTypeConversion(new org.apache.avro.data.TimeConversions.DateConversion());
-  }
 
   private static final BinaryMessageEncoder<IssuerRisk> ENCODER =
       new BinaryMessageEncoder<IssuerRisk>(MODEL$, SCHEMA$);
@@ -773,6 +770,134 @@ static {
     READER$.read(this, SpecificData.getDecoder(in));
   }
 
+  @Override protected boolean hasCustomCoders() { return true; }
+
+  @Override public void customEncode(org.apache.avro.io.Encoder out)
+    throws java.io.IOException
+  {
+    out.writeEnum(this.UIDType.ordinal());
+
+    out.writeString(this.UID);
+
+    out.writeString(this.SMCI);
+
+    out.writeString(this.BusinessDate);
+
+    out.writeDouble(this.CR01);
+
+    out.writeDouble(this.JTD);
+
+    long size0 = this.JTDRolldown.size();
+    out.writeArrayStart();
+    out.setItemCount(size0);
+    long actualSize0 = 0;
+    for (org.uwh.RolldownItem e0: this.JTDRolldown) {
+      actualSize0++;
+      out.startItem();
+      e0.customEncode(out);
+    }
+    out.writeArrayEnd();
+    if (actualSize0 != size0)
+      throw new java.util.ConcurrentModificationException("Array-size written was " + size0 + ", but element count was " + actualSize0 + ".");
+
+    out.writeLong(this.AuditDateTimeUTC);
+
+  }
+
+  @Override public void customDecode(org.apache.avro.io.ResolvingDecoder in)
+    throws java.io.IOException
+  {
+    org.apache.avro.Schema.Field[] fieldOrder = in.readFieldOrderIfDiff();
+    if (fieldOrder == null) {
+      this.UIDType = org.uwh.UIDType.values()[in.readEnum()];
+
+      this.UID = in.readString();
+
+      this.SMCI = in.readString();
+
+      this.BusinessDate = in.readString();
+
+      this.CR01 = in.readDouble();
+
+      this.JTD = in.readDouble();
+
+      long size0 = in.readArrayStart();
+      java.util.List<org.uwh.RolldownItem> a0 = this.JTDRolldown;
+      if (a0 == null) {
+        a0 = new SpecificData.Array<org.uwh.RolldownItem>((int)size0, SCHEMA$.getField("JTDRolldown").schema());
+        this.JTDRolldown = a0;
+      } else a0.clear();
+      SpecificData.Array<org.uwh.RolldownItem> ga0 = (a0 instanceof SpecificData.Array ? (SpecificData.Array<org.uwh.RolldownItem>)a0 : null);
+      for ( ; 0 < size0; size0 = in.arrayNext()) {
+        for ( ; size0 != 0; size0--) {
+          org.uwh.RolldownItem e0 = (ga0 != null ? ga0.peek() : null);
+          if (e0 == null) {
+            e0 = new org.uwh.RolldownItem();
+          }
+          e0.customDecode(in);
+          a0.add(e0);
+        }
+      }
+
+      this.AuditDateTimeUTC = in.readLong();
+
+    } else {
+      for (int i = 0; i < 8; i++) {
+        switch (fieldOrder[i].pos()) {
+        case 0:
+          this.UIDType = org.uwh.UIDType.values()[in.readEnum()];
+          break;
+
+        case 1:
+          this.UID = in.readString();
+          break;
+
+        case 2:
+          this.SMCI = in.readString();
+          break;
+
+        case 3:
+          this.BusinessDate = in.readString();
+          break;
+
+        case 4:
+          this.CR01 = in.readDouble();
+          break;
+
+        case 5:
+          this.JTD = in.readDouble();
+          break;
+
+        case 6:
+          long size0 = in.readArrayStart();
+          java.util.List<org.uwh.RolldownItem> a0 = this.JTDRolldown;
+          if (a0 == null) {
+            a0 = new SpecificData.Array<org.uwh.RolldownItem>((int)size0, SCHEMA$.getField("JTDRolldown").schema());
+            this.JTDRolldown = a0;
+          } else a0.clear();
+          SpecificData.Array<org.uwh.RolldownItem> ga0 = (a0 instanceof SpecificData.Array ? (SpecificData.Array<org.uwh.RolldownItem>)a0 : null);
+          for ( ; 0 < size0; size0 = in.arrayNext()) {
+            for ( ; size0 != 0; size0--) {
+              org.uwh.RolldownItem e0 = (ga0 != null ? ga0.peek() : null);
+              if (e0 == null) {
+                e0 = new org.uwh.RolldownItem();
+              }
+              e0.customDecode(in);
+              a0.add(e0);
+            }
+          }
+          break;
+
+        case 7:
+          this.AuditDateTimeUTC = in.readLong();
+          break;
+
+        default:
+          throw new java.io.IOException("Corrupt ResolvingDecoder.");
+        }
+      }
+    }
+  }
 }
 
 

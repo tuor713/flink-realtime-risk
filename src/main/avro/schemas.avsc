@@ -157,10 +157,7 @@
     "fields": [
       {
         "name": "Date",
-        "type": {
-          "type": "int",
-          "logicalType": "date"
-        }
+        "type": "int"
       },
       {
         "name": "JTD",

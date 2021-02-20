@@ -21,7 +21,6 @@ import org.uwh.flink.data.generic.Field;
 import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.RecordType;
 
-import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -89,7 +88,7 @@ public class SerializationTest {
         // For double + 80 bytes = 240 extra bytes payload
         System.out.println("Avro + 20 rolldown: " + serializedLength(
                 new IssuerRisk(UIDType.UIPID, "BOOK:123", "1", "20201231", 100.0, 1000000.0,
-                        IntStream.range(0,20).mapToObj(i -> new RolldownItem(LocalDate.now(), 1000000.0)).collect(Collectors.toList()),
+                        IntStream.range(0,20).mapToObj(i -> new RolldownItem(1, 1000000.0)).collect(Collectors.toList()),
                         System.currentTimeMillis()),
                 TypeInformation.of(IssuerRisk.class)
         ));

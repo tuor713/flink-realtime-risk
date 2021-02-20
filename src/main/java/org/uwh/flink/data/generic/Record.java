@@ -41,9 +41,7 @@ public class Record {
         this.data = new GenericData.Record(type.getSchema());
         set(RecordType.F_ROW_KIND, kind);
 
-        for (Field f : type.getFields()) {
-            this.setRaw(f, rec.getRaw(f));
-        }
+        copyAll(rec, type.getFields());
     }
 
     public<T> T get(Field<T> field) {
@@ -53,7 +51,6 @@ public class Record {
     public<T> void set(Field<T> field, T value) {
         type.set(data, field, value);
     }
-
 
     public Object getRaw(Field field) {
         return data.get(type.indexOf(field));

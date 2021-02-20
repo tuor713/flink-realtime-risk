@@ -15,7 +15,6 @@ import org.uwh.Issuer;
 import org.uwh.RolldownItem;
 import org.uwh.UIDType;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
@@ -156,7 +155,7 @@ public class RecordTest {
     @Test
     public void testNestedList() throws Exception {
         RecordType type = new RecordType(config, F_RISK_ISSUER_JTD_ROLLDOWN);
-        Record rec = new Record(type).with(F_RISK_ISSUER_JTD_ROLLDOWN, List.of(new RolldownItem(LocalDate.now(), 1000.0), new RolldownItem(LocalDate.now(), 2000.0)));
+        Record rec = new Record(type).with(F_RISK_ISSUER_JTD_ROLLDOWN, List.of(new RolldownItem(1, 1000.0), new RolldownItem(2, 2000.0)));
         assertEquals(2, rec.get(F_RISK_ISSUER_JTD_ROLLDOWN).size());
         assertEquals(2000.0, rec.get(F_RISK_ISSUER_JTD_ROLLDOWN).get(1).getJTD(), 0.1);
 

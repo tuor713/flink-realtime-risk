@@ -16,7 +16,6 @@ import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.Stream;
 import org.uwh.flink.util.DelayedSourceFunction;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -187,13 +186,13 @@ public class MainJob {
                     break;
                 }
 
-                LocalDate iDate = value.get(i).getDate();
-                LocalDate jDate = accumulator.get(j).getDate();
-                if (iDate.equals(jDate)) {
+                int iDate = value.get(i).getDate();
+                int jDate = accumulator.get(j).getDate();
+                if (iDate == jDate) {
                     result.add(new RolldownItem(iDate, accumulator.get(j).getJTD() + factor * value.get(i).getJTD()));
                     i++;
                     j++;
-                } else if (iDate.isBefore(jDate)) {
+                } else if (iDate < jDate) {
                     result.add(new RolldownItem(iDate, factor * value.get(i).getJTD()));
                     i++;
                 } else {

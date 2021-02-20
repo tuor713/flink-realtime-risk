@@ -3,6 +3,7 @@ package org.uwh.flink.data.generic;
 import org.apache.avro.generic.GenericData;
 import org.apache.flink.types.RowKind;
 
+import java.util.Collection;
 import java.util.Objects;
 
 public class Record {
@@ -53,6 +54,7 @@ public class Record {
         type.set(data, field, value);
     }
 
+
     public Object getRaw(Field field) {
         return data.get(type.indexOf(field));
     }
@@ -66,10 +68,18 @@ public class Record {
         return this;
     }
 
-    public void copyInto(Record rec) {
-        for (Field f : rec.getType().getFields()) {
-            setRaw(f, rec.getRaw(f));
+    public<T> void copy(Record other, Field<T> field) {
+        setRaw(field, other.getRaw(field));
+    }
+
+    public void copyAll(Record other, Collection<Field> fields) {
+        for (Field f: fields) {
+            setRaw(f, other.getRaw(f));
         }
+    }
+
+    public void copyInto(Record rec) {
+        copyAll(rec, rec.getType().getFields());
     }
 
     public RowKind getKind() {

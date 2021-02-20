@@ -11,7 +11,6 @@ import org.apache.flink.types.Either;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 import org.uwh.IssuerRiskLine;
-import org.uwh.flink.data.generic.Field;
 import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.RecordType;
 
@@ -135,7 +134,9 @@ public class RiskJoin extends KeyedBroadcastProcessFunction<String, Either<Recor
         } else {
             // Risk update
             Set<String> newIssuers = new HashSet<>();
-            newRisk.get(F_RISK_ISSUER_RISKS).forEach(risk -> newIssuers.add(risk.getSMCI()));
+
+            List<IssuerRiskLine> risks = newRisk.get(F_RISK_ISSUER_RISKS);
+            risks.forEach(risk -> newIssuers.add(risk.getSMCI()));
 
             Set<String> oldIssuers = new HashSet<>();
             if (curRisk != null) {
@@ -150,7 +151,7 @@ public class RiskJoin extends KeyedBroadcastProcessFunction<String, Either<Recor
                 }
             }
 
-            for (IssuerRiskLine risk : newRisk.get(F_RISK_ISSUER_RISKS)) {
+            for (IssuerRiskLine risk : risks) {
                 res.add(joinRecord(
                         oldIssuers.contains(risk.getSMCI()) ? RowKind.UPDATE_AFTER : RowKind.INSERT,
                         joinType,
@@ -165,10 +166,7 @@ public class RiskJoin extends KeyedBroadcastProcessFunction<String, Either<Recor
 
     private static Record joinRecord(RowKind kind, RecordType joinType, IssuerRiskLine risk, Record position) {
         Record res = new Record(kind, joinType);
-
-        for (Field f : position.getType().getFields()) {
-            res.set(f, position.get(f));
-        }
+        res.copyInto(position);
 
         return res.with(F_ISSUER_ID, risk.getSMCI())
                 .with(F_RISK_ISSUER_CR01, risk.getCR01())

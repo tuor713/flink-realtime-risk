@@ -295,9 +295,7 @@ public class Stream implements Serializable {
 
                     private Record update(Record current, Record next) {
                         Record res = new Record(next.getKind(), resType);
-                        for (Field dim : dimensions) {
-                            res.set(dim, next.get(dim));
-                        }
+                        res.copyAll(next, dimensions);
 
                         for (Expressions.Aggregation agg : aggregations) {
                             Object value = next.get(agg.getInputField());

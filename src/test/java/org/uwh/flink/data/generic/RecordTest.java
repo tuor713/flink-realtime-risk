@@ -5,13 +5,17 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.ListTypeInfo;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.core.memory.DataInputDeserializer;
 import org.apache.flink.core.memory.DataOutputSerializer;
 import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
+import org.uwh.Issuer;
+import org.uwh.RolldownItem;
 import org.uwh.UIDType;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
@@ -19,11 +23,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RecordTest {
-    private static final Field<String> F_POS_UID = new Field<>("position", "uid", String.class, Types.STRING);
-    private static final Field<UIDType> F_POS_UID_TYPE = new Field<>("position", "uid-type", UIDType.class, TypeInformation.of(UIDType.class));
-    private static final Field<String> F_CLOSEDATE = new Field<>("risk", "close-date", String.class, Types.STRING);
-    private static final Field<Double> F_RISK_ISSUER_JTD = new Field<>("issuer-risk","jtd", Double.class, Types.DOUBLE);
-    private static final Field<Long> F_AUDIT_DATE_TIME = new Field<>("general", "audit-date-time", Long.class, Types.LONG);
+    private static final Field<String> F_POS_UID = new Field<>("position", "uid", Types.STRING);
+    private static final Field<UIDType> F_POS_UID_TYPE = new Field<>("position", "uid-type", TypeInformation.of(UIDType.class));
+    private static final Field<String> F_CLOSEDATE = new Field<>("risk", "close-date", Types.STRING);
+    private static final Field<Double> F_RISK_ISSUER_JTD = new Field<>("issuer-risk","jtd", Types.DOUBLE);
+    private static final Field<Long> F_AUDIT_DATE_TIME = new Field<>("general", "audit-date-time", Types.LONG);
+    private static final Field<Issuer> F_ISSUER = new Field<>("general", "issuer", TypeInformation.of(Issuer.class));
+    private static final Field<List<RolldownItem>> F_RISK_ISSUER_JTD_ROLLDOWN = new Field<>("issuer-risk", "jtd-rolldown", new ListTypeInfo<>(RolldownItem.class));
     private static final ExecutionConfig config = new ExecutionConfig();
 
     @Test
@@ -135,6 +141,28 @@ public class RecordTest {
 
         outer = serializeDeserialize(outer);
         assertEquals("123", outer.get(innerField).get(F_POS_UID));
+    }
+
+    @Test
+    public void testNestedAvroObject() throws Exception {
+        RecordType type = new RecordType(config, F_ISSUER);
+        Record rec = new Record(type).with(F_ISSUER, new Issuer("123", "Issuer 123", "1"));
+        assertEquals("123", rec.get(F_ISSUER).getSMCI());
+
+        rec = serializeDeserialize(rec);
+        assertEquals("123", rec.get(F_ISSUER).getSMCI());
+    }
+
+    @Test
+    public void testNestedList() throws Exception {
+        RecordType type = new RecordType(config, F_RISK_ISSUER_JTD_ROLLDOWN);
+        Record rec = new Record(type).with(F_RISK_ISSUER_JTD_ROLLDOWN, List.of(new RolldownItem(LocalDate.now(), 1000.0), new RolldownItem(LocalDate.now(), 2000.0)));
+        assertEquals(2, rec.get(F_RISK_ISSUER_JTD_ROLLDOWN).size());
+        assertEquals(2000.0, rec.get(F_RISK_ISSUER_JTD_ROLLDOWN).get(1).getJTD(), 0.1);
+
+        rec = serializeDeserialize(rec);
+        assertEquals(2, rec.get(F_RISK_ISSUER_JTD_ROLLDOWN).size());
+        assertEquals(2000.0, rec.get(F_RISK_ISSUER_JTD_ROLLDOWN).get(1).getJTD(), 0.1);
     }
 
     private int serializedLength(Record rec) throws Exception {

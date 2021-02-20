@@ -41,7 +41,7 @@ public class Record {
         set(RecordType.F_ROW_KIND, kind);
 
         for (Field f : type.getFields()) {
-            this.set(f, rec.get(f));
+            this.setRaw(f, rec.getRaw(f));
         }
     }
 
@@ -53,6 +53,14 @@ public class Record {
         type.set(data, field, value);
     }
 
+    public Object getRaw(Field field) {
+        return data.get(type.indexOf(field));
+    }
+
+    public void setRaw(Field field, Object value) {
+        data.put(type.indexOf(field), value);
+    }
+
     public<T> Record with(Field<T> field, T value) {
         set(field, value);
         return this;
@@ -60,7 +68,7 @@ public class Record {
 
     public void copyInto(Record rec) {
         for (Field f : rec.getType().getFields()) {
-            set(f, rec.get(f));
+            setRaw(f, rec.getRaw(f));
         }
     }
 

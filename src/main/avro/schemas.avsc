@@ -164,7 +164,7 @@
       },
       {
         "name": "JTD",
-        "type": "float"
+        "type": "double"
       }
     ]
   },

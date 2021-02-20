@@ -87,7 +87,7 @@ public class Generators {
         List<RolldownItem> items = new ArrayList<>();
         LocalDate date = LocalDate.now();
         for (int i=0; i<NO_JTD_ROLLDOWN; i++) {
-            items.add(new RolldownItem(date.plusDays(i), (float)jtd/NO_JTD_ROLLDOWN));
+            items.add(new RolldownItem(date.plusDays(i), jtd/NO_JTD_ROLLDOWN));
         }
 
         return items;

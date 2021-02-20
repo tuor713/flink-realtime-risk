@@ -168,7 +168,7 @@ public class MainJob {
 
         @Override
         public List<RolldownItem> update(List<RolldownItem> value, List<RolldownItem> accumulator, boolean retract) {
-            float factor = retract ? -1 : 1;
+            double factor = retract ? -1 : 1;
             List<RolldownItem> result = new ArrayList<>();
 
             int i = 0;

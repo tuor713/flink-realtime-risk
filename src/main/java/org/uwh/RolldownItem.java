@@ -14,8 +14,8 @@ import org.apache.avro.message.SchemaStore;
 
 @org.apache.avro.specific.AvroGenerated
 public class RolldownItem extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
-  private static final long serialVersionUID = 9150532013762195067L;
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"RolldownItem\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"Date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},{\"name\":\"JTD\",\"type\":\"float\"}]}");
+  private static final long serialVersionUID = -8396342249704156444L;
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"RolldownItem\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"Date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},{\"name\":\"JTD\",\"type\":\"double\"}]}");
   public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
   private static SpecificData MODEL$ = new SpecificData();
@@ -75,7 +75,7 @@ static {
   }
 
    private java.time.LocalDate Date;
-   private float JTD;
+   private double JTD;
 
   /**
    * Default constructor.  Note that this does not initialize fields
@@ -89,7 +89,7 @@ static {
    * @param Date The new value for Date
    * @param JTD The new value for JTD
    */
-  public RolldownItem(java.time.LocalDate Date, java.lang.Float JTD) {
+  public RolldownItem(java.time.LocalDate Date, java.lang.Double JTD) {
     this.Date = Date;
     this.JTD = JTD;
   }
@@ -122,7 +122,7 @@ static {
   public void put(int field$, java.lang.Object value$) {
     switch (field$) {
     case 0: Date = (java.time.LocalDate)value$; break;
-    case 1: JTD = (java.lang.Float)value$; break;
+    case 1: JTD = (java.lang.Double)value$; break;
     default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
   }
@@ -148,7 +148,7 @@ static {
    * Gets the value of the 'JTD' field.
    * @return The value of the 'JTD' field.
    */
-  public float getJTD() {
+  public double getJTD() {
     return JTD;
   }
 
@@ -157,7 +157,7 @@ static {
    * Sets the value of the 'JTD' field.
    * @param value the value to set.
    */
-  public void setJTD(float value) {
+  public void setJTD(double value) {
     this.JTD = value;
   }
 
@@ -203,7 +203,7 @@ static {
     implements org.apache.avro.data.RecordBuilder<RolldownItem> {
 
     private java.time.LocalDate Date;
-    private float JTD;
+    private double JTD;
 
     /** Creates a new Builder */
     private Builder() {
@@ -285,7 +285,7 @@ static {
       * Gets the value of the 'JTD' field.
       * @return The value.
       */
-    public float getJTD() {
+    public double getJTD() {
       return JTD;
     }
 
@@ -295,7 +295,7 @@ static {
       * @param value The value of 'JTD'.
       * @return This builder.
       */
-    public org.uwh.RolldownItem.Builder setJTD(float value) {
+    public org.uwh.RolldownItem.Builder setJTD(double value) {
       validate(fields()[1], value);
       this.JTD = value;
       fieldSetFlags()[1] = true;
@@ -326,7 +326,7 @@ static {
       try {
         RolldownItem record = new RolldownItem();
         record.Date = fieldSetFlags()[0] ? this.Date : (java.time.LocalDate) defaultValue(fields()[0]);
-        record.JTD = fieldSetFlags()[1] ? this.JTD : (java.lang.Float) defaultValue(fields()[1]);
+        record.JTD = fieldSetFlags()[1] ? this.JTD : (java.lang.Double) defaultValue(fields()[1]);
         return record;
       } catch (org.apache.avro.AvroMissingFieldException e) {
         throw e;

@@ -86,9 +86,10 @@ public class SerializationTest {
         // date (int) + float = 8 bytes per entry
         //  = 160 bytes payload
         //  Total overhead 161 bytes = 160 + 1 byte for length
+        // For double + 80 bytes = 240 extra bytes payload
         System.out.println("Avro + 20 rolldown: " + serializedLength(
                 new IssuerRisk(UIDType.UIPID, "BOOK:123", "1", "20201231", 100.0, 1000000.0,
-                        IntStream.range(0,20).mapToObj(i -> new RolldownItem(LocalDate.now(), (float) 1000000.0)).collect(Collectors.toList()),
+                        IntStream.range(0,20).mapToObj(i -> new RolldownItem(LocalDate.now(), 1000000.0)).collect(Collectors.toList()),
                         System.currentTimeMillis()),
                 TypeInformation.of(IssuerRisk.class)
         ));

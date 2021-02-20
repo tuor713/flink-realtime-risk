@@ -14,8 +14,8 @@ import org.apache.avro.message.SchemaStore;
 
 @org.apache.avro.specific.AvroGenerated
 public class IssuerRiskLine extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
-  private static final long serialVersionUID = 710693237675593759L;
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"IssuerRiskLine\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"SMCI\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"CR01\",\"type\":\"double\"},{\"name\":\"JTD\",\"type\":\"double\"},{\"name\":\"JTDRolldown\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"RolldownItem\",\"fields\":[{\"name\":\"Date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},{\"name\":\"JTD\",\"type\":\"float\"}]}}}]}");
+  private static final long serialVersionUID = 5389137108335810514L;
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"IssuerRiskLine\",\"namespace\":\"org.uwh\",\"fields\":[{\"name\":\"SMCI\",\"type\":{\"type\":\"string\",\"avro.java.string\":\"String\"}},{\"name\":\"CR01\",\"type\":\"double\"},{\"name\":\"JTD\",\"type\":\"double\"},{\"name\":\"JTDRolldown\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"RolldownItem\",\"fields\":[{\"name\":\"Date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},{\"name\":\"JTD\",\"type\":\"double\"}]}}}]}");
   public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
   private static SpecificData MODEL$ = new SpecificData();

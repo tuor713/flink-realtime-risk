@@ -4,6 +4,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.EitherTypeInfo;
+import org.apache.flink.api.java.typeutils.ListTypeInfo;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -13,6 +14,7 @@ import org.apache.flink.types.Either;
 import org.uwh.*;
 import org.uwh.flink.data.generic.Field;
 import org.uwh.flink.data.generic.Record;
+import org.uwh.flink.data.generic.RecordType;
 import org.uwh.flink.data.generic.Stream;
 import org.uwh.flink.util.DelayedSourceFunction;
 
@@ -87,14 +89,29 @@ public class MainJob {
                 rec -> Tuple2.of(rec.get(F_POS_UID_TYPE), rec.get(F_POS_UID)),
                 new TupleTypeInfo<>(Types.STRING, Types.STRING));
 
+        RecordType riskLineType = new RecordType(env.getConfig(), F_ISSUER_ID, F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD, F_RISK_ISSUER_JTD_ROLLDOWN);
+        TypeInformation<List<Record>> riskLineTypeInfo = new ListTypeInfo<>(riskLineType);
+        Field<List<Record>> fieldRiskLines = new Field<>("issuer-risk", "risks", riskLineTypeInfo);
+
         Stream batchRisk = Stream.fromDataStream(
                 batchStream,
                 $(r -> r.getUIDType().name(), F_POS_UID_TYPE),
                 $(IssuerRiskBatch::getUID, F_POS_UID),
-                $(IssuerRiskBatch::getRisk, F_RISK_ISSUER_RISKS)
+                $(r -> {
+                    List<Record> risks = new ArrayList<>();
+                    for (IssuerRiskLine line : r.getRisk()) {
+                        risks.add(new Record(riskLineType)
+                                .with(F_ISSUER_ID, line.getSMCI())
+                                .with(F_RISK_ISSUER_CR01, line.getCR01())
+                                .with(F_RISK_ISSUER_JTD, line.getJTD())
+                                .with(F_RISK_ISSUER_JTD_ROLLDOWN, line.getJTDRolldown()));
+                    }
+
+                    return risks;
+                }, fieldRiskLines)
         );
 
-        RiskJoin join = new RiskJoin(batchRisk.getRecordType(), posWithAccount.getRecordType(), issuersWithParent.getRecordType());
+        RiskJoin join = new RiskJoin(batchRisk.getRecordType(), fieldRiskLines, riskLineType, posWithAccount.getRecordType(), issuersWithParent.getRecordType());
 
         DataStream<Record> finalDataStream = batchRisk
                 .getDataStream()

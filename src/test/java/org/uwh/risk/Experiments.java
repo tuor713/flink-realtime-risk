@@ -61,7 +61,7 @@ public class Experiments {
                 $(pos -> pos.getUID(), Fields.F_POS_UID),
                 $(pos -> pos.getFirmAccountMnemonic(), Fields.F_ACCOUNT_MNEMONIC));
 
-        RiskJoin join = new RiskJoin(riskStream.getRecordType(), posStream.getRecordType(), issuerStream.getRecordType());
+        RiskJoin join = new RiskJoin(riskStream.getRecordType(), null, null, posStream.getRecordType(), issuerStream.getRecordType());
 
         DataStream<Record> joined = riskStream
                 .getDataStream()

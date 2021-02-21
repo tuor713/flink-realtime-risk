@@ -3,6 +3,7 @@ package org.uwh.flink.data.generic;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -242,21 +243,26 @@ public class Stream implements Serializable {
 
         DataStream<Record> resStream = stream.keyBy(rec -> new Record(RowKind.INSERT, dimType, rec), dimType)
                 .process(new KeyedProcessFunction<>() {
-                    private transient ValueState<Record> pending;
                     private transient ValueState<Record> lastPublished;
+                    private transient ValueState<Boolean> isDirty;
+                    private transient List<ValueState> aggStates;
 
                     @Override
                     public void open(Configuration parameters) {
-                        pending = getRuntimeContext().getState(new ValueStateDescriptor<>("pending", resType));
                         lastPublished = getRuntimeContext().getState(new ValueStateDescriptor<>("lastPublished", resType));
+                        isDirty = getRuntimeContext().getState(new ValueStateDescriptor<Boolean>("dirty", Types.BOOLEAN));
+                        aggStates = aggregations.stream().map(agg -> {
+                            ValueStateDescriptor desc = new ValueStateDescriptor(agg.getOutputField().getFullName(), agg.getOutputField().getType());
+                            return getRuntimeContext().getState(desc);
+                        }).collect(Collectors.toList());
                     }
 
                     @Override
                     public void onTimer(long timestamp, OnTimerContext ctx, Collector<Record> out) throws Exception {
-                        Record next = pending.value();
+                        Record next = currentRecord(ctx.getCurrentKey());
                         Record last = lastPublished.value();
 
-                        pending.clear();
+                        isDirty.update(false);
 
                         // Record has been removed
                         if (next.getKind() == RowKind.DELETE) {
@@ -281,34 +287,43 @@ public class Stream implements Serializable {
                         }
                     }
 
+                    private Record currentRecord(Record currentKey) throws Exception {
+                        Record res = new Record(resType);
+                        res.copyAll(currentKey, dimType.getFields());
+                        int i=0;
+                        for (Expressions.Aggregation agg : aggregations) {
+                            res.set(agg.getOutputField(), aggStates.get(i).value());
+                            i++;
+                        }
+                        return res;
+                    }
+
                     @Override
                     public void processElement(Record rec, Context context, Collector<Record> collector) throws Exception {
-                        Record last = pending.value();
-                        if (last == null) {
-                            last = lastPublished.value();
+                        Boolean dirty = isDirty.value();
+
+                        if (dirty == null || !dirty) {
+                            isDirty.update(true);
                             context.timerService().registerProcessingTimeTimer(context.timerService().currentProcessingTime()+throttleMs);
                         }
 
-                        Record res = update(last, rec);
-                        pending.update(res);
+                        updateAggs(rec);
                     }
 
-                    private Record update(Record current, Record next) {
-                        Record res = new Record(next.getKind(), resType);
-                        res.copyAll(next, dimensions);
-
+                    private void updateAggs(Record next) throws Exception {
+                        int i=0;
                         for (Expressions.Aggregation agg : aggregations) {
+                            ValueState aggState = aggStates.get(i);
+                            i++;
+                            Object prev = aggState.value();
                             Object value = next.get(agg.getInputField());
                             boolean retract = next.getKind() == RowKind.DELETE || next.getKind() == RowKind.UPDATE_BEFORE;
-                            Object prev = (current != null) ? current.get(agg.getOutputField()) : null;
                             if (prev == null) {
-                                res.set(agg.getOutputField(), agg.init(value, retract));
+                                aggState.update(agg.init(value, retract));
                             } else {
-                                res.set(agg.getOutputField(), agg.update(value, prev, retract));
+                                aggState.update(agg.update(value, prev, retract));
                             }
                         }
-
-                        return res;
                     }
                 }, resType).name("AGGREGATE "
                         + String.join(", ", aggregations.stream().map(f -> f.toString()).collect(Collectors.toList()))

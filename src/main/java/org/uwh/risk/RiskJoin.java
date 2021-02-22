@@ -25,24 +25,33 @@ Heart piece of the risk streaming join
  */
 public class RiskJoin extends KeyedBroadcastProcessFunction<String, Either<Record,Record>, Record, Record> implements ResultTypeQueryable<Record> {
     private ValueState<Tuple2<Record,Record>> current;
-    private RecordType riskType;
-    private RecordType riskLineType;
-    private Field<List<Record>> fieldRiskLines;
-    private RecordType posType;
-    private RecordType issuerType;
-    private RecordType resType;
-    private MapStateDescriptor<String,Record> broadcastStateDescriptor;
+    private final RecordType riskType;
+    private final Field<List<Record>> fieldRiskLines;
+    private final RecordType posType;
+    private final RecordType resType;
+    private final MapStateDescriptor<String,Record> broadcastStateDescriptor;
+
+    private final RecordType.Copier issuerCopier;
+    private final RecordType.Copier joinCopier;
+    private final RecordType.Copier positionCopier;
+    private final RecordType.Copier riskCopier;
 
     public RiskJoin(RecordType riskType, Field<List<Record>> fieldRiskLines, RecordType riskLineType, RecordType posType, RecordType issuerType) {
         this.riskType = riskType;
         this.fieldRiskLines = fieldRiskLines;
-        this.riskLineType = riskLineType;
         this.posType = posType;
-        this.issuerType = issuerType;
         broadcastStateDescriptor = new MapStateDescriptor<>("broadcast", Types.STRING, issuerType);
 
         // cannot use riskType because that is the batch level risk
         resType = new RecordType(riskType.getConfig(), F_RISK_ISSUER_JTD, F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD_ROLLDOWN).join(posType).join(issuerType);
+
+        issuerCopier = new RecordType.Copier(issuerType, resType);
+        joinCopier = new RecordType.Copier(
+                resType,
+                resType,
+                new RecordType(riskType.getConfig(), F_ISSUER_ID, F_RISK_ISSUER_JTD, F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD_ROLLDOWN).join(posType).getFields());
+        positionCopier = new RecordType.Copier(posType, resType);
+        riskCopier = new RecordType.Copier(riskLineType, resType, List.of(F_ISSUER_ID, F_RISK_ISSUER_JTD, F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD_ROLLDOWN));
     }
 
     public MapStateDescriptor<String,Record> getMapStateDescriptor() {
@@ -115,8 +124,8 @@ public class RiskJoin extends KeyedBroadcastProcessFunction<String, Either<Recor
         Record issuer = state.get(smci);
         if (issuer != null) {
             Record res = new Record(riskAndPos.getKind(), resType);
-            res.copyInto(riskAndPos);
-            res.copyInto(issuer);
+            joinCopier.copy(riskAndPos, res);
+            issuerCopier.copy(issuer, res);
             return res;
         } else {
             return null;
@@ -168,10 +177,10 @@ public class RiskJoin extends KeyedBroadcastProcessFunction<String, Either<Recor
         return res;
     }
 
-    private static Record joinRecord(RowKind kind, RecordType joinType, Record risk, Record position) {
+    private Record joinRecord(RowKind kind, RecordType joinType, Record risk, Record position) {
         Record res = new Record(kind, joinType);
-        res.copyInto(position);
-        res.copyAll(risk, List.of(F_ISSUER_ID, F_RISK_ISSUER_CR01, F_RISK_ISSUER_JTD, F_RISK_ISSUER_JTD_ROLLDOWN));
+        positionCopier.copy(position, res);
+        riskCopier.copy(risk, res);
         return res;
     }
 }

@@ -26,6 +26,7 @@ public class RecordType extends TypeInformation<Record> {
     private final FieldSetter[] setters;
     private final SerializableAvroSchema schema;
     public static final Field<RowKind> F_ROW_KIND = new Field("_record","row-kind",TypeInformation.of(RowKind.class));
+    private final FieldRef<RowKind> fieldRefRowKind;
 
     // copied from Flink internal
     final static class SerializableAvroSchema implements Serializable {
@@ -75,6 +76,28 @@ public class RecordType extends TypeInformation<Record> {
         void set(GenericData.Record data, T value);
     }
 
+    public static class Copier implements Serializable {
+        private final List<FieldRef> inputRefs;
+        private final List<FieldRef> outputRefs;
+
+        public Copier(RecordType source, RecordType target) {
+            this(source, target, source.getFields());
+        }
+
+        public Copier(RecordType source, RecordType target, Collection<Field> fields) {
+            inputRefs = new ArrayList<>();
+            outputRefs = new ArrayList<>();
+            for (Field f : fields) {
+                inputRefs.add(source.getFieldRef(f));
+                outputRefs.add(target.getFieldRef(f));
+            }
+        }
+
+        public void copy(Record input, Record output) {
+            output.copyAll(input, inputRefs, outputRefs);
+        }
+    }
+
     @SuppressWarnings("rawtypes")
     public RecordType(ExecutionConfig config, Field... fields) {
         this(config, Arrays.asList(fields));
@@ -108,6 +131,8 @@ public class RecordType extends TypeInformation<Record> {
 
             idx++;
         }
+
+        fieldRefRowKind = getFieldRef(F_ROW_KIND);
     }
 
     private Schema buildSchema() {
@@ -127,6 +152,14 @@ public class RecordType extends TypeInformation<Record> {
         return new Schema.Field(f.getFullName(), schema);
     }
 
+    public<T> FieldRef<T> getFieldRef(Field<T> field) {
+        return new FieldRef<>(field, indexOf(field));
+    }
+
+    public FieldRef<RowKind> getRowTypeFieldRef() {
+        return fieldRefRowKind;
+    }
+
     public Schema getSchema() {
         return schema.getAvroSchema();
     }
@@ -135,8 +168,17 @@ public class RecordType extends TypeInformation<Record> {
         return (T) getters[indexOf(field)].get(data);
     }
 
+    public<T> T get(GenericData.Record data, FieldRef<T> field) {
+        return (T) getters[field.getPosition()].get(data);
+    }
+
+
     public<T> void set(GenericData.Record data, Field<T> field, T value) {
         setters[indexOf(field)].set(data, value);
+    }
+
+    public<T> void set(GenericData.Record data, FieldRef<T> field, T value) {
+        setters[field.getPosition()].set(data, value);
     }
 
     @SuppressWarnings("rawtypes")

@@ -246,6 +246,7 @@ public class Stream implements Serializable {
                     private transient ValueState<Record> lastPublished;
                     private transient ValueState<Boolean> isDirty;
                     private transient List<ValueState> aggStates;
+                    private transient List<FieldRef> inputFieldRefs;
 
                     @Override
                     public void open(Configuration parameters) {
@@ -255,6 +256,7 @@ public class Stream implements Serializable {
                             ValueStateDescriptor desc = new ValueStateDescriptor(agg.getOutputField().getFullName(), agg.getOutputField().getType());
                             return getRuntimeContext().getState(desc);
                         }).collect(Collectors.toList());
+                        inputFieldRefs = aggregations.stream().map(agg -> type.getFieldRef(agg.getInputField())).collect(Collectors.toList());
                     }
 
                     @Override
@@ -314,9 +316,10 @@ public class Stream implements Serializable {
                         int i=0;
                         for (Expressions.Aggregation agg : aggregations) {
                             ValueState aggState = aggStates.get(i);
-                            i++;
                             Object prev = aggState.value();
-                            Object value = next.get(agg.getInputField());
+                            Object value = next.get(inputFieldRefs.get(i));
+                            i++;
+
                             boolean retract = next.getKind() == RowKind.DELETE || next.getKind() == RowKind.UPDATE_BEFORE;
                             if (prev == null) {
                                 aggState.update(agg.init(value, retract));

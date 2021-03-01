@@ -1,5 +1,6 @@
 package org.uwh.flink.data.generic;
 
+import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -24,6 +25,8 @@ public class Stream implements Serializable {
     private transient final DataStream<Record> stream;
     private final RecordType type;
     private final ChangeLogMode changeLogMode;
+
+    private static final Field<Integer> F_GROUPING_SET_ID = new Field<>("_internal", "grouping-set-id", Types.INT);
 
     public enum ChangeLogMode {
         // only Insert records
@@ -242,95 +245,57 @@ public class Stream implements Serializable {
         RecordType resType = new RecordType(type.getConfig(), resFields);
 
         DataStream<Record> resStream = stream.keyBy(rec -> new Record(RowKind.INSERT, dimType, rec), dimType)
-                .process(new KeyedProcessFunction<>() {
-                    private transient ValueState<Record> lastPublished;
-                    private transient ValueState<Boolean> isDirty;
-                    private transient List<ValueState> aggStates;
-                    private transient List<FieldRef> inputFieldRefs;
-
-                    @Override
-                    public void open(Configuration parameters) {
-                        lastPublished = getRuntimeContext().getState(new ValueStateDescriptor<>("lastPublished", resType));
-                        isDirty = getRuntimeContext().getState(new ValueStateDescriptor<Boolean>("dirty", Types.BOOLEAN));
-                        aggStates = aggregations.stream().map(agg -> {
-                            ValueStateDescriptor desc = new ValueStateDescriptor(agg.getOutputField().getFullName(), agg.getOutputField().getType());
-                            return getRuntimeContext().getState(desc);
-                        }).collect(Collectors.toList());
-                        inputFieldRefs = aggregations.stream().map(agg -> type.getFieldRef(agg.getInputField())).collect(Collectors.toList());
-                    }
-
-                    @Override
-                    public void onTimer(long timestamp, OnTimerContext ctx, Collector<Record> out) throws Exception {
-                        Record next = currentRecord(ctx.getCurrentKey());
-                        Record last = lastPublished.value();
-
-                        isDirty.update(false);
-
-                        // Record has been removed
-                        if (next.getKind() == RowKind.DELETE) {
-                            if (last == null) {
-                                // record was never sent, do nothing
-                            } else {
-                                // retract previous record, clear state
-                                lastPublished.clear();
-                                out.collect(new Record(RowKind.DELETE, resType, last));
-                            }
-                        } else if (last == null) {
-                            Record publish = new Record(RowKind.INSERT, resType, next);
-                            lastPublished.update(publish);
-                            out.collect(publish);
-                        } else {
-                            // retract previous value, inject new value
-                            Record retract = new Record(RowKind.UPDATE_BEFORE, resType, last);
-                            Record upsert = new Record(RowKind.UPDATE_AFTER, resType, next);
-                            lastPublished.update(upsert);
-                            out.collect(retract);
-                            out.collect(upsert);
-                        }
-                    }
-
-                    private Record currentRecord(Record currentKey) throws Exception {
-                        Record res = new Record(resType);
-                        res.copyAll(currentKey, dimType.getFields());
-                        int i=0;
-                        for (Expressions.Aggregation agg : aggregations) {
-                            res.set(agg.getOutputField(), aggStates.get(i).value());
-                            i++;
-                        }
-                        return res;
-                    }
-
-                    @Override
-                    public void processElement(Record rec, Context context, Collector<Record> collector) throws Exception {
-                        Boolean dirty = isDirty.value();
-
-                        if (dirty == null || !dirty) {
-                            isDirty.update(true);
-                            context.timerService().registerProcessingTimeTimer(context.timerService().currentProcessingTime()+throttleMs);
-                        }
-
-                        updateAggs(rec);
-                    }
-
-                    private void updateAggs(Record next) throws Exception {
-                        int i=0;
-                        for (Expressions.Aggregation agg : aggregations) {
-                            ValueState aggState = aggStates.get(i);
-                            Object prev = aggState.value();
-                            Object value = next.get(inputFieldRefs.get(i));
-                            i++;
-
-                            boolean retract = next.getKind() == RowKind.DELETE || next.getKind() == RowKind.UPDATE_BEFORE;
-                            if (prev == null) {
-                                aggState.update(agg.init(value, retract));
-                            } else {
-                                aggState.update(agg.update(value, prev, retract));
-                            }
-                        }
-                    }
-                }, resType).name("AGGREGATE "
+                .process(new AggregationFunction(dimensions, aggregations, type, resType, throttleMs), resType)
+                .name("AGGREGATE "
                         + String.join(", ", aggregations.stream().map(f -> f.toString()).collect(Collectors.toList()))
                         + " ON " + String.join(", ", dimensions.stream().map(f -> f.toString()).collect(Collectors.toList())));
+
+        return new Stream(resStream, resType, ChangeLogMode.CHANGE_LOG);
+    }
+
+    public Stream rollup(List<Set<Field>> groupingSets, Collection<Expressions.Aggregation> aggregations) {
+        /*
+        Strategy similar to Blink implementation:
+        1. Add virtual grouping_set_id field
+        2. Duplicate records once for each grouping set
+        3. Key by and aggregation by grouping values _and_ grouping_set_id
+         */
+
+        Set<Field> allDimensions = groupingSets.stream().flatMap(Collection::stream).collect(Collectors.toSet());
+
+        List<Field> resFields = new ArrayList<>(allDimensions);
+        aggregations.forEach(agg -> resFields.add(agg.getOutputField()));
+
+        Set<Field> aggInFields = aggregations.stream().map(agg -> agg.getInputField()).collect(Collectors.toSet());
+
+        Set<Field> inputFields = new HashSet<>(allDimensions);
+        inputFields.add(F_GROUPING_SET_ID);
+        inputFields.addAll(aggInFields);
+
+        Set<Field> nullables = new HashSet<>(type.getNullable());
+        nullables.addAll(allDimensions);
+        RecordType inputType = new RecordType(type.getConfig(), inputFields, nullables);
+        RecordType dimType = new RecordType(type.getConfig(), allDimensions, new HashSet<>(allDimensions));
+        RecordType dimAndGroupIdType = dimType.withFields(F_GROUPING_SET_ID);
+        RecordType resType = new RecordType(type.getConfig(), resFields, new HashSet<>(allDimensions));
+
+        DataStream<Record> resStream = stream
+                .flatMap(new FlatMapFunction<>() {
+                    @Override
+                    public void flatMap(Record record, Collector<Record> collector) {
+                        for (int i = 0; i < groupingSets.size(); i++) {
+                            Record res = new Record(record.getKind(), inputType);
+                            // copy only fields needed - inputs to aggregation & dimensions of the current grouping set
+                            res.copyAll(record, aggInFields);
+                            res.copyAll(record, groupingSets.get(i));
+                            res.set(F_GROUPING_SET_ID, i);
+                            collector.collect(res);
+                        }
+                    }
+                }, inputType)
+                .keyBy(rec -> new Record(RowKind.INSERT, dimAndGroupIdType, rec), dimAndGroupIdType)
+                // note the dimensions used for output do *not* include the grouping set id
+                .process(new AggregationFunction(allDimensions, aggregations, inputType, resType, -1), resType);
 
         return new Stream(resStream, resType, ChangeLogMode.CHANGE_LOG);
     }

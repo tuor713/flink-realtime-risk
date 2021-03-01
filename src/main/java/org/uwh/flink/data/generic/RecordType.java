@@ -25,7 +25,7 @@ public class RecordType extends TypeInformation<Record> {
     private final FieldGetter[] getters;
     private final FieldSetter[] setters;
     private final SerializableAvroSchema schema;
-    public static final Field<RowKind> F_ROW_KIND = new Field("_record","row-kind",TypeInformation.of(RowKind.class));
+    public static final Field<RowKind> F_ROW_KIND = new Field("_internal","row-kind", TypeInformation.of(RowKind.class));
     private final FieldRef<RowKind> fieldRefRowKind;
 
     // copied from Flink internal
@@ -152,6 +152,12 @@ public class RecordType extends TypeInformation<Record> {
         return new Schema.Field(f.getFullName(), schema);
     }
 
+    public RecordType withFields(Field ... additionalFields) {
+        List<Field> allFields = new ArrayList<>(fields);
+        allFields.addAll(Arrays.asList(additionalFields));
+        return new RecordType(config, allFields);
+    }
+
     public<T> FieldRef<T> getFieldRef(Field<T> field) {
         return new FieldRef<>(field, indexOf(field));
     }
@@ -162,6 +168,10 @@ public class RecordType extends TypeInformation<Record> {
 
     public Schema getSchema() {
         return schema.getAvroSchema();
+    }
+
+    public Set<Field> getNullable() {
+        return Collections.unmodifiableSet(nullable);
     }
 
     public<T> T get(GenericData.Record data, Field<T> field) {

@@ -16,8 +16,37 @@ public class Expressions {
         AGGT update(IT value, AGGT accumulator, boolean retract);
     }
 
+    public static<X> Aggregation<X,X> last(Field<X> field) {
+        return new Aggregation<>() {
+            @Override
+            public Field<X> getInputField() {
+                return field;
+            }
+
+            @Override
+            public Field<X> getOutputField() {
+                return field;
+            }
+
+            @Override
+            public X init(X value, boolean retract) {
+                return value;
+            }
+
+            @Override
+            public X update(X value, X accumulator, boolean retract) {
+                return value;
+            }
+
+            @Override
+            public String toString() {
+                return "last(" + field + ")";
+            }
+        };
+    }
+
     public static Aggregation<Double,Double> sum(Field<Double> field) {
-        return new Aggregation<Double, Double>() {
+        return new Aggregation<>() {
             @Override
             public Field<Double> getInputField() {
                 return field;
@@ -39,6 +68,11 @@ public class Expressions {
                 } else {
                     return accumulator + value;
                 }
+            }
+
+            @Override
+            public String toString() {
+                return "sum(" + field + ")";
             }
         };
     }

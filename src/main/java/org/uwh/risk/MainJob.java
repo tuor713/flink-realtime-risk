@@ -21,13 +21,13 @@ import org.uwh.flink.util.DelayedSourceFunction;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.uwh.flink.data.generic.Expressions.*;
 import static org.uwh.risk.Fields.*;
 
 public class MainJob {
-
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment.setDefaultLocalParallelism(4);
         Configuration conf = new Configuration();
@@ -130,14 +130,39 @@ public class MainJob {
 
         // === Tier 2 logic ===
 
-        Stream aggStream = finalStream.aggregate(
+        Stream firstAggStream = finalStream.aggregate(
+                List.of(F_ISSUER_ULTIMATE_PARENT_ID, F_ISSUER_ID, F_POS_PRODUCT_TYPE),
+                List.of(
+                        sum(F_RISK_ISSUER_CR01),
+                        sum(F_RISK_ISSUER_JTD),
+                        new RolldownAggegration(),
+                        last(F_ISSUER_ULTIMATE_PARENT_NAME),
+                        last(F_ISSUER_NAME)
+                ),
+                10_000);
+
+        firstAggStream.log("STAGE2", 1_000);
+
+        firstAggStream.rollup(
+                List.of(
+                        Set.of(F_ISSUER_ULTIMATE_PARENT_ID, F_ISSUER_ID),
+                        Set.of(F_ISSUER_ULTIMATE_PARENT_ID, F_POS_PRODUCT_TYPE)
+                ),
+                List.of(
+                        sum(F_RISK_ISSUER_CR01),
+                        sum(F_RISK_ISSUER_JTD)
+                )
+        ).log("ROLLUP", 1_000);
+
+        Stream aggStream = firstAggStream.aggregate(
                 List.of(F_ISSUER_ULTIMATE_PARENT_ID),
                 List.of(
                         sum(F_RISK_ISSUER_CR01),
                         sum(F_RISK_ISSUER_JTD),
-                        new RolldownAggegration()
+                        new RolldownAggegration(),
+                        last(F_ISSUER_ULTIMATE_PARENT_NAME)
                 ),
-                10_000);
+                -1);
 
         DataStream<RiskThreshold> thresholdStream = Generators.thresholds(env, Generators.NO_ULTIMATE);
 

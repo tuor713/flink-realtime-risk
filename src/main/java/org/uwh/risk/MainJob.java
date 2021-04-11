@@ -40,7 +40,7 @@ public class MainJob {
         /*
         Need to delay the main firehoses so that ref data, particularly issuers, can be loaded first. Otherwise the broadcast side of the join is very slow (involving iteration).
          */
-        int delayMs = 10_000;
+        int delayMs = 120_000;
         List<RiskPosition> posList = Generators.positionList(numPositions, Generators.NO_USED_ACCOUNT);
         DataStream<RiskPosition> posStream = DelayedSourceFunction.delay(
                 env,
@@ -63,11 +63,20 @@ public class MainJob {
                 $(it -> it.getUltimateParentSMCI()!= null ? it.getUltimateParentSMCI() : it.getSMCI(),  F_ISSUER_ULTIMATE_PARENT_ID)
         );
 
-        Stream parentIssuer = issuers.select(
-                as(F_ISSUER_ID, F_ISSUER_ULTIMATE_PARENT_ID),
-                as(F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_NAME));
+        Stream parentIssuer = issuers
+                .where(rec -> rec.get(F_ISSUER_ID).equals(rec.get(F_ISSUER_ULTIMATE_PARENT_ID)))
+                .select(
+                        as(F_ISSUER_ID, F_ISSUER_ULTIMATE_PARENT_ID),
+                        as(F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_NAME));
 
-        Stream issuersWithParent = issuers.joinManyToOne(parentIssuer, F_ISSUER_ULTIMATE_PARENT_ID, F_ISSUER_ID);
+        DataStream<String> ids = Generators.batchRisk(env, numPositions, Generators.NO_USED_ISSUER)
+                .flatMap((batch, collector) -> {
+                    for (IssuerRiskLine risk : batch.getRisk()) {
+                        collector.collect(risk.getSMCI());
+                    }
+                }, Types.STRING);
+
+        Stream issuersWithParent = issuers.filter(ids, F_ISSUER_ID).joinManyToOne(parentIssuer, F_ISSUER_ULTIMATE_PARENT_ID, F_ISSUER_ID);
 
         Stream accounts = Stream.fromDataStream(
                 accountStream,

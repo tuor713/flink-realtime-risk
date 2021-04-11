@@ -1,5 +1,6 @@
 package org.uwh.flink.data.generic;
 
+import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
@@ -10,6 +11,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.functions.co.KeyedCoProcessFunction;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 import org.uwh.flink.util.DeltaJoinFunction;
@@ -159,6 +161,54 @@ public class Stream implements Serializable {
                     return res;
                 }, resultType).name(createSelectName(expressions)),
                 resultType,
+                changeLogMode
+        );
+    }
+
+    public Stream where(FilterFunction<Record> filter) {
+        return new Stream(
+                stream.filter(filter),
+                type,
+                changeLogMode
+        );
+    }
+
+    public Stream filter(DataStream<String> ids, Field<String> idField) {
+        return new Stream(
+                stream.keyBy(rec -> rec.get(idField), Types.STRING)
+                    .connect(ids.keyBy(id -> id))
+                    .process(new KeyedCoProcessFunction<String, Record, String, Record>() {
+                        private transient ValueState<Record> pending;
+                        private transient ValueState<Boolean> gate;
+
+                        @Override
+                        public void open(Configuration parameters) {
+                            pending = getRuntimeContext().getState(new ValueStateDescriptor<>("pending", type));
+                            gate = getRuntimeContext().getState(new ValueStateDescriptor<>("gate", Types.BOOLEAN));
+                        }
+
+                        @Override
+                        public void processElement1(Record record, Context context, Collector<Record> collector) throws Exception {
+                            if (gate.value() != null) {
+                                collector.collect(record);
+                            } else {
+                                pending.update(record);
+                            }
+                        }
+
+                        @Override
+                        public void processElement2(String s, Context context, Collector<Record> collector) throws Exception {
+                            if (gate.value() == null) {
+                                gate.update(true);
+                                Record rec = pending.value();
+                                pending.clear();
+                                if (rec != null) {
+                                    collector.collect(rec);
+                                }
+                            }
+                        }
+                    }, type),
+                type,
                 changeLogMode
         );
     }

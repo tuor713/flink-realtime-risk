@@ -18,11 +18,11 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class Generators {
-    public static final int NO_ISSUER = 100_000;
+    public static final int NO_ISSUER = 5_000_000;
+    public static final int NO_ULTIMATE = 1_000;
     public static final int NO_ACCOUNT = 10_000;
     public static final int NO_USED_ACCOUNT = 1_000;
     public static final int NO_USED_ISSUER = 10_000;
-    public static final int NO_ULTIMATE = 1_000;
     public static final int NO_POSITION = 500_000;
     public static final int NO_ISSUERS_FOR_INDEX = 125;
     public static final int NO_JTD_ROLLDOWN = 20;

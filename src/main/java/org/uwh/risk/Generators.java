@@ -84,12 +84,11 @@ public class Generators {
         return type == UIDType.UITID && r % 4 == 0;
     }
 
-    private static List<RolldownItem> rolldownItems(double jtd) {
-        List<RolldownItem> items = new ArrayList<>();
+    private static List<RolldownItem> rolldownItems(int id, double jtd) {
         LocalDate date = LocalDate.now();
-        for (int i=0; i<NO_JTD_ROLLDOWN; i++) {
-            items.add(new RolldownItem(date.plusDays(i), jtd/NO_JTD_ROLLDOWN));
-        }
+        List<RolldownItem> items = new ArrayList<>();
+        items.add(new RolldownItem(date, jtd));
+        items.add(new RolldownItem(date.plusDays((97*id) % NO_JTD_ROLLDOWN), 0.0));
 
         return items;
     }
@@ -103,12 +102,12 @@ public class Generators {
             int index = id % 4;
             for (int issuerId = NO_ISSUERS_FOR_INDEX*index; issuerId < NO_ISSUERS_FOR_INDEX*(index+1); issuerId++) {
                 double jtd = randomJTD(r);
-                risks.add(new IssuerRiskLine(String.valueOf(issuerId), randomCR01(r), jtd, rolldownItems(jtd)));
+                risks.add(new IssuerRiskLine(String.valueOf(issuerId), randomCR01(r), jtd, rolldownItems(id, jtd)));
             }
         } else {
             String issuerId = String.valueOf(((id & 1) == 1) ? id % issuerLimit : id % (issuerLimit/10));
             double jtd = randomJTD(r);
-            risks = List.of(new IssuerRiskLine(issuerId, randomCR01(r), jtd, rolldownItems(jtd)));
+            risks = List.of(new IssuerRiskLine(issuerId, randomCR01(r), jtd, rolldownItems(id, jtd)));
         }
 
         return new IssuerRiskBatch(uid.f0, uid.f1, COB, System.currentTimeMillis(), risks);

@@ -19,11 +19,9 @@ import org.uwh.flink.data.generic.Stream;
 import org.uwh.flink.util.BootstrapSource;
 import org.uwh.flink.util.DelayedSourceFunction;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.uwh.flink.data.generic.Expressions.*;
 import static org.uwh.risk.Fields.*;
@@ -41,7 +39,7 @@ public class MainJob {
         /*
         Need to delay the main firehoses so that ref data, particularly issuers, can be loaded first. Otherwise the broadcast side of the join is very slow (involving iteration).
          */
-        int delayMs = 120_000;
+        int delayMs = 60_000;
         List<RiskPosition> posList = Generators.positionList(numPositions, Generators.NO_USED_ACCOUNT);
         DataStream<RiskPosition> posStream = DelayedSourceFunction.delay(
                 env,
@@ -146,7 +144,7 @@ public class MainJob {
                 List.of(
                         sum(F_RISK_ISSUER_CR01),
                         sum(F_RISK_ISSUER_JTD),
-                        new RolldownAggegration(),
+                        new RolldownAggregation(),
                         last(F_ISSUER_ULTIMATE_PARENT_NAME),
                         last(F_ISSUER_NAME)
                 ),
@@ -170,7 +168,7 @@ public class MainJob {
                 List.of(
                         sum(F_RISK_ISSUER_CR01),
                         sum(F_RISK_ISSUER_JTD),
-                        new RolldownAggegration(),
+                        new RolldownAggregation(),
                         last(F_ISSUER_ULTIMATE_PARENT_NAME)
                 ),
                 -1);
@@ -197,65 +195,5 @@ public class MainJob {
         ).log("LIMIT", 1_000);
 
         env.execute();
-    }
-
-    private static class RolldownAggegration implements Aggregation<List<RolldownItem>,List<RolldownItem>> {
-        @Override
-        public Field<List<RolldownItem>> getInputField() {
-            return F_RISK_ISSUER_JTD_ROLLDOWN;
-        }
-
-        @Override
-        public Field<List<RolldownItem>> getOutputField() {
-            return F_RISK_ISSUER_JTD_ROLLDOWN;
-        }
-
-        @Override
-        public List<RolldownItem> init(List<RolldownItem> value, boolean retract) {
-            if (retract) {
-                return value.stream().map(it -> new RolldownItem(it.getDate(), -it.getJTD())).collect(Collectors.toList());
-            } else {
-                return value;
-            }
-        }
-
-        @Override
-        public List<RolldownItem> update(List<RolldownItem> value, List<RolldownItem> accumulator, boolean retract) {
-            double factor = retract ? -1 : 1;
-            List<RolldownItem> result = new ArrayList<>();
-
-            int i = 0;
-            int j = 0;
-            while (i < value.size() || j < accumulator.size()) {
-                if (i == value.size()) {
-                    for (int k = j; k<accumulator.size(); k++) {
-                        result.add(accumulator.get(k));
-                    }
-                    break;
-                }
-                if (j == accumulator.size()) {
-                    for (int k = i; k<value.size(); k++) {
-                        result.add(new RolldownItem(value.get(k).getDate(), value.get(k).getJTD()));
-                    }
-                    break;
-                }
-
-                LocalDate iDate = value.get(i).getDate();
-                LocalDate jDate = accumulator.get(j).getDate();
-                if (iDate.equals(jDate)) {
-                    result.add(new RolldownItem(iDate, accumulator.get(j).getJTD() + factor * value.get(i).getJTD()));
-                    i++;
-                    j++;
-                } else if (iDate.isBefore(jDate)) {
-                    result.add(new RolldownItem(iDate, factor * value.get(i).getJTD()));
-                    i++;
-                } else {
-                    result.add(accumulator.get(j));
-                    j++;
-                }
-            }
-
-            return result;
-        }
     }
 }

@@ -16,6 +16,7 @@ import org.uwh.flink.data.generic.Field;
 import org.uwh.flink.data.generic.Record;
 import org.uwh.flink.data.generic.RecordType;
 import org.uwh.flink.data.generic.Stream;
+import org.uwh.flink.util.BootstrapSource;
 import org.uwh.flink.util.DelayedSourceFunction;
 
 import java.time.LocalDate;
@@ -69,7 +70,8 @@ public class MainJob {
                         as(F_ISSUER_ID, F_ISSUER_ULTIMATE_PARENT_ID),
                         as(F_ISSUER_NAME, F_ISSUER_ULTIMATE_PARENT_NAME));
 
-        DataStream<String> ids = Generators.batchRisk(env, numPositions, Generators.NO_USED_ISSUER)
+        DataStream<String> ids = env.addSource(new BootstrapSource<>(Generators.batchRisk(numPositions, Generators.NO_USED_ISSUER), TypeInformation.of(IssuerRiskBatch.class), delayMs))
+                .union(batchStream)
                 .flatMap((batch, collector) -> {
                     for (IssuerRiskLine risk : batch.getRisk()) {
                         collector.collect(risk.getSMCI());

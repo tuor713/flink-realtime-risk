@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -180,16 +181,22 @@ public class Generators {
 
     public static RichParallelSourceFunction<IssuerRiskBatch> batchRisk(int posLimit, int issuerLimit) {
         return new RichParallelSourceFunction<>() {
+            private transient AtomicBoolean done = new AtomicBoolean();
+
             @Override
             public void run(SourceContext<IssuerRiskBatch> sourceContext) {
+                done = new AtomicBoolean(false);
+
                 Random r = new Random();
-                while (true) {
+                while (!done.get()) {
                     sourceContext.collect(randomBatchRisk(r, posLimit, issuerLimit));
                 }
             }
 
             @Override
-            public void cancel() {}
+            public void cancel() {
+                done.set(true);
+            }
         };
     }
 

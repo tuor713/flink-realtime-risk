@@ -22,22 +22,26 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 /**
- * TODO Can we support de-duplication?
  * TODO Can we support TTL / cleanup?
  */
-public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, Tuple, Tuple> {
+public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, MultiLeftJoin.TaggedObject, Tuple> {
     private final int rhsArity;
     private final TypeInformation<X> lhsType;
+    private final FilterFunction<X> lhsFilter;
     private final TypeInformation[] rhsTypes;
+    private final FilterFunction[] rhsFilters;
     private transient ValueState<X> leftCache;
     private transient ValueState[] rhsCache;
 
-    private MultiLeftJoin(TypeInformation<X> lhsType, TypeInformation[] rhsTypes) {
+    private MultiLeftJoin(TypeInformation<X> lhsType, TypeInformation[] rhsTypes, FilterFunction<X> lhsFilter, FilterFunction[] rhsFilters) {
         this.lhsType = lhsType;
         this.rhsArity = rhsTypes.length;
         this.rhsTypes = rhsTypes;
+        this.lhsFilter = lhsFilter;
+        this.rhsFilters = rhsFilters;
     }
 
     @Override
@@ -51,38 +55,48 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, Tuple, Tup
     }
 
     @Override
-    public void processElement1(X x, KeyedCoProcessFunction<K, X, Tuple, Tuple>.Context context, Collector<Tuple> collector) throws Exception {
-        leftCache.update(x);
-        Tuple result = Tuple.newInstance(rhsArity+1);
-        result.setField(x, 0);
-        for (int i=0; i<rhsArity; i++) {
-            result.setField(rhsCache[i].value(), i+1);
+    public void processElement1(X x, KeyedCoProcessFunction<K, X, TaggedObject, Tuple>.Context context, Collector<Tuple> collector) throws Exception {
+        if (lhsFilter != null) {
+            X previous = leftCache.value();
+            if (previous == null || lhsFilter.filter(previous, x)) {
+                leftCache.update(x);
+                emitResult(x, collector);
+            }
+        } else {
+            leftCache.update(x);
+            emitResult(x, collector);
         }
-        collector.collect(result);
     }
 
     @Override
-    public void processElement2(Tuple y, KeyedCoProcessFunction<K, X, Tuple, Tuple>.Context context, Collector<Tuple> collector) throws Exception {
-        int idx = y.getField(0);
-        rhsCache[idx].update(y.getField(idx+1));
+    public void processElement2(TaggedObject y, KeyedCoProcessFunction<K, X, TaggedObject, Tuple>.Context context, Collector<Tuple> collector) throws Exception {
+        if (rhsFilters[y.tag] != null) {
+            Object prev = rhsCache[y.tag].value();
+            if (prev == null || rhsFilters[y.tag].filter(prev, y.value)) {
+                rhsCache[y.tag].update(y.value);
 
-        // only one field will be non-null
-//        for (int i=0; i<rhsArity; i++) {
-//            if (y.getField(i) != null) {
-//                rhsCache[i].update(y.getField(i));
-//                break;
-//            }
-//        }
-
-        X x = leftCache.value();
-        if (x != null) {
-            Tuple result = Tuple.newInstance(rhsArity + 1);
-            result.setField(x, 0);
-            for (int i = 0; i < rhsArity; i++) {
-                result.setField(rhsCache[i].value(), i + 1);
+                X x = leftCache.value();
+                if (x != null) {
+                    emitResult(x, collector);
+                }
             }
-            collector.collect(result);
+        } else {
+            rhsCache[y.tag].update(y.value);
+
+            X x = leftCache.value();
+            if (x != null) {
+                emitResult(x, collector);
+            }
         }
+    }
+
+    private void emitResult(X x, Collector<Tuple> collector) throws Exception {
+        Tuple result = Tuple.newInstance(rhsArity + 1);
+        result.setField(x, 0);
+        for (int i = 0; i < rhsArity; i++) {
+            result.setField(rhsCache[i].value(), i + 1);
+        }
+        collector.collect(result);
     }
 
     public static class TaggedObject {
@@ -255,16 +269,40 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, Tuple, Tup
         }
     }
 
+    public static interface FilterFunction<X> extends Serializable {
+        boolean filter(X prev, X next);
+    }
+
+    public static class RHSKey<K> implements KeySelector<TaggedObject, K> {
+        private final List<KeySelector> joinKeys;
+
+        public RHSKey(List<KeySelector> joinKeys) {
+            this.joinKeys = joinKeys;
+        }
+
+        @Override
+        public K getKey(TaggedObject taggedObject) throws Exception {
+            return (K) joinKeys.get(taggedObject.tag).getKey(taggedObject.value);
+        }
+    }
+
     public static class Builder<K, X> implements Serializable {
         private transient final DataStream<X> lhs;
         private final KeySelector<X, K> leftKey;
         private final TypeInformation<X> lhsType;
         private final TypeInformation<K> keyType;
+        private final Optional<FilterFunction<X>> lhsFilter;
         private transient final List<DataStream> joins;
         private final List<KeySelector> joinKeys;
         private final List<TypeInformation> rhsTypes;
+        private final List<Optional<FilterFunction>> filters;
 
         public Builder(DataStream<X> lhs, KeySelector<X, K> leftKey, TypeInformation<X> lhsType, TypeInformation<K> keyType) {
+            this(lhs, leftKey, lhsType, keyType, Optional.empty());
+        }
+
+
+        public Builder(DataStream<X> lhs, KeySelector<X, K> leftKey, TypeInformation<X> lhsType, TypeInformation<K> keyType, Optional<FilterFunction<X>> filter) {
             this.lhs = lhs;
             this.leftKey = leftKey;
             this.lhsType = lhsType;
@@ -272,35 +310,34 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, Tuple, Tup
             joins = new ArrayList<>();
             joinKeys = new ArrayList<>();
             rhsTypes = new ArrayList<>();
+            filters = new ArrayList<>();
+            lhsFilter = filter;
         }
 
         public <Y> Builder<K, X> addJoin(DataStream<Y> join, KeySelector<Y, K> joinKey, TypeInformation<Y> type) {
+            return addJoin(join, joinKey, type, Optional.empty());
+        }
+
+        public <Y> Builder<K, X> addJoin(DataStream<Y> join, KeySelector<Y, K> joinKey, TypeInformation<Y> type, Optional<FilterFunction<Y>> filter) {
             joins.add(join);
             joinKeys.add(joinKey);
             rhsTypes.add(type);
+            filters.add((Optional) filter);
             return this;
         }
+
 
         public DataStream<Tuple> build() {
             KeyedStream<X, K> leftSide = lhs.keyBy(leftKey);
 
-            final int size = joins.size()+1;
+            final int size = joins.size();
 
-            List<TypeInformation> inputTypes = new ArrayList<>();
-            inputTypes.add(TypeInformation.of(Integer.class));
-            inputTypes.addAll(rhsTypes);
+            DataStream<TaggedObject> rightSide = null;
+            TypeInformation<TaggedObject> rhsSumType = new TaggedObjectTypeInformation(rhsTypes.toArray(new TypeInformation[rhsTypes.size()]));
 
-            DataStream rightSide = null;
-            TypeInformation rhsTupleType = new TupleTypeInfo<>(inputTypes.toArray(new TypeInformation[inputTypes.size()]));
-
-            for (int i = 0; i < joins.size(); i++) {
+            for (int i = 0; i < size; i++) {
                 final int j = i;
-                DataStream<Tuple> newRHS = joins.get(i).map(o -> {
-                    Tuple t = Tuple.newInstance(size);
-                    t.setField(j, 0);
-                    t.setField(o, j+1);
-                    return t;
-                }).returns(rhsTupleType);
+                DataStream<TaggedObject> newRHS = joins.get(i).map(o -> new TaggedObject(j, o)).returns(rhsSumType);
                 if (i==0) {
                     rightSide = newRHS;
                 } else {
@@ -308,23 +345,9 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, Tuple, Tup
                 }
             }
 
-            KeyedStream rhsKeyed = rightSide.keyBy(new KeySelector<Tuple, K>() {
-                @Override
-                public K getKey(Tuple o) throws Exception {
-                    int idx = o.getField(0);
-                    return (K) joinKeys.get(idx).getKey(o.getField(idx+1));
+            KeyedStream rhsKeyed = rightSide.keyBy(new RHSKey<>(joinKeys), keyType);
 
-//                    for (int i= 0; i<size; i++) {
-//                        if (o.getField(i) != null) {
-//                            return (K) joinKeys.get(i).getKey(o.getField(i));
-//                        }
-//                    }
-//
-//                    throw new IllegalStateException("Tuple with no element set");
-                }
-            }, keyType);
-
-            TypeInformation[] returnTypes = new TypeInformation[rhsTypes.size()+1];
+            TypeInformation<?>[] returnTypes = new TypeInformation[rhsTypes.size()+1];
             returnTypes[0] = lhsType;
             for (int i=0; i<rhsTypes.size(); i++) {
                 returnTypes[i+1] = rhsTypes.get(i);
@@ -332,7 +355,12 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, Tuple, Tup
 
             return leftSide
                     .connect(rhsKeyed)
-                    .process(new MultiLeftJoin<K, X>(lhsType, rhsTypes.toArray(new TypeInformation[rhsTypes.size()])))
+                    .process(new MultiLeftJoin<K, X>(
+                            lhsType,
+                            rhsTypes.toArray(new TypeInformation[rhsTypes.size()]),
+                            lhsFilter.orElse(null),
+                            filters.stream().map(f -> f.orElse(null)).toArray(s -> new FilterFunction[s])
+                    ))
                     .returns(new TupleTypeInfo(returnTypes));
         }
     }

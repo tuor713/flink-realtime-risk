@@ -16,6 +16,7 @@ import org.uwh.flink.util.OneToOneJoin;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public class MultiLeftJoinTest {
     @BeforeEach
@@ -27,11 +28,11 @@ public class MultiLeftJoinTest {
     public void testMultiJoin() throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment(1);
 
-        DataStream<IntBean> ints = env.fromCollection(List.of(1, 2, 3, 4, 5)).map(i -> new IntBean(i));
+        DataStream<IntBean> ints = env.fromCollection(List.of(1, 1, 1, 2, 3, 4, 5)).map(i -> new IntBean(i));
         DataStream<IntBean> doubles = env.fromCollection(List.of(2, 4, 6, 8, 10)).map(i -> new IntBean(i));
         DataStream<IntBean> squares = env.fromCollection(List.of(1, 4, 9, 16, 25)).map(i -> new IntBean(i));
 
-        new MultiLeftJoin.Builder<>(ints, i -> i.getNumber(), TypeInformation.of(IntBean.class), TypeInformation.of(Integer.class))
+        new MultiLeftJoin.Builder<>(ints, i -> i.getNumber(), TypeInformation.of(IntBean.class), TypeInformation.of(Integer.class), Optional.of((oldX, newX) -> oldX.getNumber() != newX.getNumber()))
                 .addJoin(doubles, i -> i.getNumber()/2, TypeInformation.of(IntBean.class))
                 .addJoin(squares, i -> (int) Math.sqrt(i.getNumber()), TypeInformation.of(IntBean.class))
                 .build()
@@ -46,6 +47,7 @@ public class MultiLeftJoinTest {
     }
 
     // 10MM/P1 => 36s, 43s, 44s, 45s, 43s
+    //   - tagged object => 40s, 40s, 32s, 42s
     // 10MM/P2 => 28s, 29s
     // 10MM/P4 => 20s, 20s
     // 10MM/P1/ObjectReuse => 32s, 31s
@@ -65,7 +67,7 @@ public class MultiLeftJoinTest {
                 .addJoin(doubles, i -> i.getNumber()/2, TypeInformation.of(IntBean.class))
                 .addJoin(triples, i -> i.getNumber()/3, TypeInformation.of(IntBean.class))
                 .build()
-                .addSink(new CountingSink());
+                .addSink(new CountingSink<>());
 
         env.execute();
 
@@ -102,7 +104,7 @@ public class MultiLeftJoinTest {
         join2.keyBy(t -> t.f0.getNumber()).connect(triples.keyBy(i -> i.getNumber()/3))
                 .process(secondJoin)
                 .returns(new TupleTypeInfo<>(TypeInformation.of(IntBean.class), TypeInformation.of(IntBean.class), TypeInformation.of(IntBean.class)))
-                .addSink(new CountingSink());
+                .addSink(new CountingSink<>());
 
         env.execute();
 

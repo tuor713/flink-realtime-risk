@@ -36,9 +36,9 @@ public class MultiLeftJoinTest {
                 .addJoin(doubles, i -> i.getNumber()/2, TypeInformation.of(IntBean.class))
                 .addJoin(squares, i -> (int) Math.sqrt(i.getNumber()), TypeInformation.of(IntBean.class))
                 .build()
-                .addSink(new SinkFunction<Tuple>() {
+                .addSink(new SinkFunction<>() {
                     @Override
-                    public void invoke(Tuple value, Context context) throws Exception {
+                    public void invoke(Tuple value, Context context) {
                         System.out.println(">>>: " + value);
                     }
                 });

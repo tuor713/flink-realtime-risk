@@ -1,6 +1,7 @@
 package org.uwh.flink.util;
 
 import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -24,9 +25,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * TODO Can we support TTL / cleanup?
- */
 public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, MultiLeftJoin.TaggedObject, Tuple> {
     private final int rhsArity;
     private final TypeInformation<X> lhsType;
@@ -36,21 +34,34 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, MultiLeftJ
     private transient ValueState<X> leftCache;
     private transient ValueState[] rhsCache;
 
-    private MultiLeftJoin(TypeInformation<X> lhsType, TypeInformation[] rhsTypes, FilterFunction<X> lhsFilter, FilterFunction[] rhsFilters) {
+    private final StateTtlConfig ttlConfig;
+
+    private MultiLeftJoin(TypeInformation<X> lhsType, TypeInformation[] rhsTypes, FilterFunction<X> lhsFilter, FilterFunction[] rhsFilters, StateTtlConfig ttlConfig) {
         this.lhsType = lhsType;
         this.rhsArity = rhsTypes.length;
         this.rhsTypes = rhsTypes;
         this.lhsFilter = lhsFilter;
         this.rhsFilters = rhsFilters;
+        this.ttlConfig = ttlConfig;
     }
 
     @Override
     public void open(Configuration parameters) throws Exception {
         super.open(parameters);
         this.rhsCache = new ValueState[rhsArity];
-        leftCache = getRuntimeContext().getState(new ValueStateDescriptor<>("left", lhsType));
+
+        ValueStateDescriptor<X> lhsDescriptor = new ValueStateDescriptor<>("left", lhsType);
+        if (ttlConfig != null) {
+            lhsDescriptor.enableTimeToLive(ttlConfig);
+        }
+        leftCache = getRuntimeContext().getState(lhsDescriptor);
+
         for (int i=0; i<rhsArity; i++) {
-            rhsCache[i] = getRuntimeContext().getState(new ValueStateDescriptor<>("right"+i, rhsTypes[i]));
+            ValueStateDescriptor rhsDescriptor = new ValueStateDescriptor<>("rhs" + i, rhsTypes[i]);
+            if (ttlConfig != null) {
+                rhsDescriptor.enableTimeToLive(ttlConfig);
+            }
+            rhsCache[i] = getRuntimeContext().getState(rhsDescriptor);
         }
     }
 
@@ -296,6 +307,7 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, MultiLeftJ
         private final List<KeySelector> joinKeys;
         private final List<TypeInformation> rhsTypes;
         private final List<Optional<FilterFunction>> filters;
+        private StateTtlConfig ttlConfig;
 
         public Builder(DataStream<X> lhs, KeySelector<X, K> leftKey, TypeInformation<X> lhsType, TypeInformation<K> keyType) {
             this(lhs, leftKey, lhsType, keyType, Optional.empty());
@@ -326,6 +338,10 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, MultiLeftJ
             return this;
         }
 
+        public Builder<K, X> withTtl(StateTtlConfig ttlConfig) {
+            this.ttlConfig = ttlConfig;
+            return this;
+        }
 
         public DataStream<Tuple> build() {
             KeyedStream<X, K> leftSide = lhs.keyBy(leftKey);
@@ -359,7 +375,8 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, MultiLeftJ
                             lhsType,
                             rhsTypes.toArray(new TypeInformation[rhsTypes.size()]),
                             lhsFilter.orElse(null),
-                            filters.stream().map(f -> f.orElse(null)).toArray(s -> new FilterFunction[s])
+                            filters.stream().map(f -> f.orElse(null)).toArray(s -> new FilterFunction[s]),
+                            ttlConfig
                     ))
                     .returns(new TupleTypeInfo(returnTypes));
         }

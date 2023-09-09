@@ -5,6 +5,7 @@ import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.common.typeutils.CompositeTypeSerializerSnapshot;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerSnapshot;
 import org.apache.flink.api.java.functions.KeySelector;
@@ -275,8 +276,33 @@ public class MultiLeftJoin<K, X> extends KeyedCoProcessFunction<K, X, MultiLeftJ
 
         @Override
         public TypeSerializerSnapshot<TaggedObject> snapshotConfiguration() {
-            // TODO
-            return null;
+            return new TaggedObjectSerializerSnapshot(this);
+        }
+    }
+
+    public static class TaggedObjectSerializerSnapshot extends CompositeTypeSerializerSnapshot<TaggedObject, TaggedObjectSerializer> {
+
+        public TaggedObjectSerializerSnapshot() {
+            super(TaggedObjectSerializer.class);
+        }
+
+        public TaggedObjectSerializerSnapshot(TaggedObjectSerializer serializer) {
+            super(serializer);
+        }
+
+        @Override
+        protected int getCurrentOuterSnapshotVersion() {
+            return 1;
+        }
+
+        @Override
+        protected TypeSerializer<?>[] getNestedSerializers(TaggedObjectSerializer taggedObjectSerializer) {
+            return taggedObjectSerializer.serializers;
+        }
+
+        @Override
+        protected TaggedObjectSerializer createOuterSerializerWithNestedSerializers(TypeSerializer<?>[] typeSerializers) {
+            return new TaggedObjectSerializer(typeSerializers);
         }
     }
 
